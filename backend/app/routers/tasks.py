@@ -26,15 +26,28 @@ def _get_task_or_404(db: Session, task_id: int) -> TaskItem:
     return task
 
 
+def _invalid_range(error: crud.TaskDateRangeError) -> HTTPException:
+    """Translate a domain date-range error into a 422 response."""
+    return HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(error))
+
+
 @router.get("", response_model=list[schemas.TaskRead], summary="List tasks")
 def list_tasks(
     db: DbSession,
     scope: Annotated[TaskScope | None, Query(description="Filter by planning scope")] = None,
-    start: Annotated[date | None, Query(description="Due on or after (YYYY-MM-DD)")] = None,
-    end: Annotated[date | None, Query(description="Due on or before (YYYY-MM-DD)")] = None,
+    start: Annotated[
+        date | None, Query(description="Tasks overlapping on or after this day (YYYY-MM-DD)")
+    ] = None,
+    end: Annotated[
+        date | None, Query(description="Tasks overlapping on or before this day (YYYY-MM-DD)")
+    ] = None,
     completed: Annotated[bool | None, Query(description="true = done, false = open")] = None,
 ) -> list[TaskItem]:
-    """Return tasks, optionally filtered by scope, due-date range and status."""
+    """Return tasks, optionally filtered by scope, date range and status.
+
+    The date range uses overlap semantics: a multi-day task is included when
+    any of its days fall inside ``[start, end]``.
+    """
     return list(crud.list_tasks(db, scope=scope, start=start, end=end, completed=completed))
 
 
@@ -45,8 +58,11 @@ def list_tasks(
     summary="Create a task",
 )
 def create_task(payload: schemas.TaskCreate, db: DbSession) -> TaskItem:
-    """Create a new open task anchored to ``due_date``."""
-    return crud.create_task(db, payload)
+    """Create a new open task on ``due_date`` (through ``end_date`` if given)."""
+    try:
+        return crud.create_task(db, payload)
+    except crud.TaskDateRangeError as error:
+        raise _invalid_range(error) from error
 
 
 @router.get("/{task_id}", response_model=schemas.TaskRead, summary="Get a task")
@@ -57,9 +73,16 @@ def get_task(task_id: int, db: DbSession) -> TaskItem:
 
 @router.patch("/{task_id}", response_model=schemas.TaskRead, summary="Update a task")
 def update_task(task_id: int, payload: schemas.TaskUpdate, db: DbSession) -> TaskItem:
-    """Partially update a task; only fields present in the body are changed."""
+    """Partially update a task; only fields present in the body are changed.
+
+    Sending only ``due_date`` moves the task and keeps a multi-day task's
+    length; sending ``end_date`` resizes it (``null`` = single day).
+    """
     task = _get_task_or_404(db, task_id)
-    return crud.update_task(db, task, payload)
+    try:
+        return crud.update_task(db, task, payload)
+    except crud.TaskDateRangeError as error:
+        raise _invalid_range(error) from error
 
 
 @router.post(

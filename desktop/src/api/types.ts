@@ -4,6 +4,7 @@
  * Keep these in sync with the backend. Conventions:
  *  - Calendar days travel as ISO strings (`YYYY-MM-DD`), never as `Date`
  *    objects, so no timezone conversion can shift a task to the wrong day.
+ *    ISO dates also compare correctly as plain strings (`a < b`).
  *  - Timestamps are ISO-8601 strings in UTC (`...Z`).
  *  - Money is a plain JSON number in major units (e.g. `149.9`); the backend
  *    stores exact integer cents, so totals it returns are already exact.
@@ -19,7 +20,7 @@ export type IsoDateTime = string;
 // Tasks
 // ---------------------------------------------------------------------------
 
-/** Planning horizon of a task. Does not affect the day it is shown on. */
+/** Planning horizon of a task. Does not affect the days it is shown on. */
 export type TaskScope = "daily" | "weekly" | "monthly" | "yearly";
 
 /** All scopes in their natural display order. */
@@ -28,13 +29,20 @@ export const TASK_SCOPES: readonly TaskScope[] = ["daily", "weekly", "monthly", 
 /** Task priority: 0 = none, 1 = low, 2 = medium, 3 = high. */
 export type TaskPriority = 0 | 1 | 2 | 3;
 
-/** A task as returned by the API. */
+/**
+ * A task as returned by the API.
+ *
+ * Multi-day tasks cover `due_date` through `end_date` inclusive; single-day
+ * tasks have `end_date: null`. `span_days` is always present (1 = single day).
+ */
 export interface Task {
   id: number;
   title: string;
   description: string | null;
   scope: TaskScope;
   due_date: IsoDate;
+  end_date: IsoDate | null;
+  span_days: number;
   priority: TaskPriority;
   color: string | null;
   is_completed: boolean;
@@ -49,14 +57,21 @@ export type TaskCreate = {
   description?: string | null;
   scope?: TaskScope;
   due_date: IsoDate;
+  /** Last day of a multi-day task; omit or `null` for a single day. */
+  end_date?: IsoDate | null;
   priority?: TaskPriority;
   color?: string | null;
 };
 
-/** Body of `PATCH /api/tasks/{id}`; only the fields present are changed. */
+/**
+ * Body of `PATCH /api/tasks/{id}`; only the fields present are changed.
+ *
+ * Sending only `due_date` *moves* the task (a multi-day task keeps its
+ * length); sending `end_date` *resizes* it (`null` = single day).
+ */
 export type TaskUpdate = Partial<TaskCreate> & { is_completed?: boolean };
 
-/** Query filters for `GET /api/tasks`. */
+/** Query filters for `GET /api/tasks` (date range uses overlap semantics). */
 export type TaskListParams = {
   scope?: TaskScope;
   start?: IsoDate;
@@ -71,7 +86,10 @@ export type TaskListParams = {
 /** Direction of a financial log. */
 export type FinanceKind = "income" | "expense";
 
-/** A financial log as returned by the API. `amount` is always positive. */
+/**
+ * A financial log as returned by the API. `amount` is always positive.
+ * `is_paid: false` marks a planned entry (a bill due, income expected).
+ */
 export interface FinanceLog {
   id: number;
   kind: FinanceKind;
@@ -80,6 +98,7 @@ export interface FinanceLog {
   category: string;
   description: string | null;
   occurred_on: IsoDate;
+  is_paid: boolean;
   created_at: IsoDateTime;
   updated_at: IsoDateTime;
 }
@@ -93,6 +112,8 @@ export type FinanceCreate = {
   category: string;
   description?: string | null;
   occurred_on: IsoDate;
+  /** Defaults to `true` on the server; `false` plans a future entry. */
+  is_paid?: boolean;
 };
 
 /** Body of `PATCH /api/finance/{id}`. */
@@ -104,56 +125,80 @@ export type FinanceListParams = {
   end?: IsoDate;
   kind?: FinanceKind;
   category?: string;
+  is_paid?: boolean;
 };
 
-/** Total for one `(category, kind)` pair within a month. */
+/** Totals for one `(category, kind)` pair within a month. `total = paid + pending`. */
 export interface CategoryBreakdown {
   category: string;
   kind: FinanceKind;
   total: number;
+  paid_total: number;
+  pending_total: number;
   count: number;
 }
 
-/** One point of the daily income/expense series. */
+/** One point of the daily series; `income`/`expense` include pending entries. */
 export interface DailyNet {
   date: IsoDate;
   income: number;
   expense: number;
   net: number;
+  income_pending: number;
+  expense_pending: number;
 }
 
-/** Response of `GET /api/finance/summary`. `daily` covers every day of the month. */
+/**
+ * Response of `GET /api/finance/summary`: a forward-looking cash-flow view.
+ *
+ * `remaining_budget = income_total − expense_paid − expense_pending`
+ * `cash_balance     = income_received − expense_paid`
+ */
 export interface FinanceSummary {
   year: number;
   month: number;
   income_total: number;
+  income_received: number;
+  income_pending: number;
   expense_total: number;
+  expense_paid: number;
+  expense_pending: number;
   net: number;
+  remaining_budget: number;
+  cash_balance: number;
   entry_count: number;
+  pending_count: number;
   by_category: CategoryBreakdown[];
   daily: DailyNet[];
+  /** The month's unpaid entries in date order. */
+  pending: FinanceLog[];
 }
 
 // ---------------------------------------------------------------------------
 // Calendar
 // ---------------------------------------------------------------------------
 
-/** Everything needed to render one calendar cell. */
+/**
+ * Everything needed to render one calendar day. Multi-day tasks are listed
+ * on every day they cover, first and in a stable order.
+ */
 export interface CalendarDay {
   date: IsoDate;
   tasks: Task[];
   finance: FinanceLog[];
   income_total: number;
   expense_total: number;
+  pending_expense_total: number;
   net: number;
   open_task_count: number;
   completed_task_count: number;
 }
 
-/** Totals across the requested calendar range. */
+/** Totals across a calendar range (each task counted once). */
 export interface CalendarTotals {
   income_total: number;
   expense_total: number;
+  pending_expense_total: number;
   net: number;
   task_count: number;
   open_task_count: number;

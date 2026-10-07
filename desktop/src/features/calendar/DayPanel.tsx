@@ -1,14 +1,21 @@
 /**
  * Side panel with the full content of the selected day.
  *
- * Unlike the cell, the panel ignores the calendar's display filters so the
- * user can always see (and act on) everything scheduled for that day.
+ * The panel loads its own day from the API instead of reading the grid's
+ * cache. That keeps it correct even when the selected day scrolls out of the
+ * loaded window in the infinite views, and it refreshes with every sync like
+ * any other query.
+ *
+ * Unlike the grid, the panel ignores display filters so the user can always
+ * see (and act on) everything scheduled for that day. Pending finance
+ * entries get a "paid" checkbox for one-click settlement.
  */
 
-import type { CalendarDay, IsoDate, Task } from "../../api";
-import { ScopeBadge } from "../../components/controls";
+import { api, type IsoDate, type Task } from "../../api";
+import { ErrorNotice, ScopeBadge } from "../../components/controls";
 import { Icon } from "../../components/Icon";
-import { formatLongDay, parseIsoDate } from "../../lib/dates";
+import { useApiAction, useApiQuery } from "../../hooks/useApi";
+import { formatDateRange, formatLongDay, parseIsoDate } from "../../lib/dates";
 import { PRIORITY_LABELS } from "../../lib/labels";
 import { formatMoney } from "../../lib/money";
 import { usePreferences } from "../../state/preferences";
@@ -16,15 +23,26 @@ import { useEditors } from "../editors/EditorsProvider";
 
 interface DayPanelProps {
   iso: IsoDate;
-  day: CalendarDay | undefined;
   onClose: () => void;
   onToggleTask: (task: Task) => void;
 }
 
-export function DayPanel({ iso, day, onClose, onToggleTask }: DayPanelProps) {
+/** "Oct 5 – 8, 2026 · day 2 of 4" for a multi-day task seen on `iso`. */
+function multiDayLabel(task: Task, iso: IsoDate): string {
+  const start = parseIsoDate(task.due_date);
+  const end = parseIsoDate(task.end_date ?? task.due_date);
+  const dayNumber = Math.round((parseIsoDate(iso).getTime() - start.getTime()) / 86_400_000) + 1;
+  return `${formatDateRange(start, end)} · day ${dayNumber} of ${task.span_days}`;
+}
+
+export function DayPanel({ iso, onClose, onToggleTask }: DayPanelProps) {
   const { openTask, openFinance } = useEditors();
   const { preferences } = usePreferences();
+  const run = useApiAction();
   const currency = preferences.defaultCurrency;
+
+  const query = useApiQuery((signal) => api.calendar.get(iso, iso, signal), [iso]);
+  const day = query.data?.days[0];
   const tasks = day?.tasks ?? [];
   const finance = day?.finance ?? [];
 
@@ -36,6 +54,8 @@ export function DayPanel({ iso, day, onClose, onToggleTask }: DayPanelProps) {
           <Icon name="close" />
         </button>
       </header>
+
+      {query.error ? <ErrorNotice error={query.error} onRetry={query.reload} /> : null}
 
       <div className="day-panel__summary">
         <div>
@@ -63,7 +83,7 @@ export function DayPanel({ iso, day, onClose, onToggleTask }: DayPanelProps) {
           </button>
         </header>
         {tasks.length === 0 ? (
-          <p className="empty-text">Nothing scheduled.</p>
+          <p className="empty-text">{query.data ? "Nothing scheduled." : "Loading…"}</p>
         ) : (
           <ul className="item-list">
             {tasks.map((task) => (
@@ -76,9 +96,11 @@ export function DayPanel({ iso, day, onClose, onToggleTask }: DayPanelProps) {
                 />
                 <button type="button" className="item-row__main" onClick={() => openTask({ task })}>
                   <span className="item-row__title">{task.title}</span>
-                  {task.priority > 0 ? (
-                    <span className="item-row__meta">{PRIORITY_LABELS[task.priority]} priority</span>
-                  ) : null}
+                  <span className="item-row__meta">
+                    {task.span_days > 1 ? multiDayLabel(task, iso) : null}
+                    {task.span_days > 1 && task.priority > 0 ? " · " : null}
+                    {task.priority > 0 ? `${PRIORITY_LABELS[task.priority]} priority` : null}
+                  </span>
                 </button>
                 <ScopeBadge scope={task.scope} full />
               </li>
@@ -102,14 +124,24 @@ export function DayPanel({ iso, day, onClose, onToggleTask }: DayPanelProps) {
           </div>
         </header>
         {finance.length === 0 ? (
-          <p className="empty-text">No income or expenses.</p>
+          <p className="empty-text">{query.data ? "No income or expenses." : "Loading…"}</p>
         ) : (
           <ul className="item-list">
             {finance.map((log) => (
-              <li key={log.id} className="item-row">
+              <li key={log.id} className={log.is_paid ? "item-row" : "item-row is-pending"}>
+                <input
+                  type="checkbox"
+                  checked={log.is_paid}
+                  onChange={() => void run(() => api.finance.togglePaid(log.id))}
+                  aria-label={log.is_paid ? `Mark ${log.category} as pending` : `Mark ${log.category} as paid`}
+                  title={log.is_paid ? (log.kind === "income" ? "Received" : "Paid") : "Mark as paid"}
+                />
                 <button type="button" className="item-row__main" onClick={() => openFinance({ log })}>
                   <span className="item-row__title">{log.category}</span>
-                  {log.description ? <span className="item-row__meta">{log.description}</span> : null}
+                  <span className="item-row__meta">
+                    {log.is_paid ? (log.kind === "income" ? "Received" : "Paid") : log.kind === "income" ? "Expected" : "Pending"}
+                    {log.description ? ` · ${log.description}` : ""}
+                  </span>
                 </button>
                 <span className={log.kind === "income" ? "item-row__amount is-positive" : "item-row__amount is-negative"}>
                   {formatMoney(log.kind === "income" ? log.amount : -log.amount, log.currency, { signed: true })}
@@ -120,7 +152,9 @@ export function DayPanel({ iso, day, onClose, onToggleTask }: DayPanelProps) {
         )}
       </section>
 
-      <p className="day-panel__hint">Tip: drag chips between days to reschedule. Double-click a day to add a task.</p>
+      <p className="day-panel__hint">
+        Tip: drag items between days to reschedule. Double-click a day to add a task.
+      </p>
     </aside>
   );
 }

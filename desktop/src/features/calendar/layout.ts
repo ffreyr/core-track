@@ -1,101 +1,146 @@
 /**
  * Calendar layout engine (pure functions, no React).
  *
- * Given a view mode, an anchor date and the user's preferences, this module
- * decides which days are visible, how they wrap into a grid and what range
- * to request from the backend. Keeping it pure makes the grid trivially
- * predictable: the component only renders `days` in order into
- * `columns × rows` cells.
+ * The calendar is always rendered as a list of *rows*; each row is a set of
+ * consecutive visible days laid out in `columns` columns. Two families of
+ * views produce those rows differently:
+ *
+ *  - **Scrolling views** (`month`, `twoWeeks`): an infinite list of calendar
+ *    weeks. This module builds the rows for a *window* of weeks
+ *    (`buildWeekRows`); the view grows the window as the user scrolls.
+ *  - **Paged views** (`week`, `days`): a fixed page computed from an anchor
+ *    date (`computePagedLayout`), navigated with the toolbar arrows.
+ *
+ * Keeping this pure makes the grid predictable: components only render the
+ * rows they are given.
  */
 
 import {
   addDays,
-  addMonths,
   eachDay,
-  endOfMonth,
-  endOfWeek,
   formatDateRange,
-  formatMonthYear,
   isWeekend,
   startOfDay,
   startOfMonth,
   startOfWeek,
+  toIsoDate,
   type WeekStart,
 } from "../../lib/dates";
 import type { CalendarViewMode, Preferences } from "../../state/preferences";
 
-/** The computed shape of the calendar for one render. */
-export interface CalendarLayout {
-  /** First day requested from the API (inclusive). */
-  rangeStart: Date;
-  /** Last day requested from the API (inclusive). */
-  rangeEnd: Date;
-  /** Days rendered as cells, in reading order (weekends removed if hidden). */
+/** One rendered row of the grid. */
+export interface CalendarRow {
+  /** Stable identity: ISO date of the row's first *calendar* day (week start). */
+  key: string;
+  /** Visible days in column order (weekends removed when hidden). */
   days: Date[];
-  /** Number of grid columns. */
-  columns: number;
-  /** Number of grid rows. */
-  rows: number;
-  /**
-   * `true` when every row is one calendar week, so a weekday header row
-   * makes sense. `false` for the rolling "days" view, whose cells label
-   * their own weekday instead.
-   */
-  weekAligned: boolean;
-  /** In month view, the month being displayed (cells outside it are dimmed). */
-  focusMonth: { year: number; month: number } | null;
-  /** Toolbar title, e.g. "October 2026" or "Oct 5 – 11, 2026". */
-  title: string;
 }
 
 /** Layout-relevant subset of preferences. */
 export type LayoutPreferences = Pick<Preferences, "weekStartsOn" | "showWeekends" | "customDayCount">;
 
-/**
- * Compute the visible range for a view mode.
- *
- * - month    → full weeks covering the anchor's month (4–6 rows).
- * - twoWeeks → the anchor's week plus the following week.
- * - week     → the anchor's week.
- * - days     → `customDayCount` days starting *at* the anchor (not week-aligned),
- *              which makes a "next 3 days" or "next 10 days" planning view.
- *              With weekends hidden it counts *working* days, so "4 Days"
- *              always shows four cells.
- */
-function visibleRange(
-  viewMode: CalendarViewMode,
-  anchor: Date,
-  weekStartsOn: WeekStart,
-  customDayCount: number,
-  showWeekends: boolean,
-): { start: Date; end: Date; weekAligned: boolean } {
-  switch (viewMode) {
-    case "month":
-      return {
-        start: startOfWeek(startOfMonth(anchor), weekStartsOn),
-        end: endOfWeek(endOfMonth(anchor), weekStartsOn),
-        weekAligned: true,
-      };
-    case "twoWeeks": {
-      const start = startOfWeek(anchor, weekStartsOn);
-      return { start, end: addDays(start, 13), weekAligned: true };
-    }
-    case "week": {
-      const start = startOfWeek(anchor, weekStartsOn);
-      return { start, end: addDays(start, 6), weekAligned: true };
-    }
-    case "days": {
-      const start = startOfDay(anchor);
-      const end = showWeekends ? addDays(start, customDayCount - 1) : stepWorkingDays(start, customDayCount - 1, 1);
-      return { start, end, weekAligned: false };
-    }
+/** Month and 2 Weeks scroll infinitely; Week and N Days are paged. */
+export function isScrollMode(viewMode: CalendarViewMode): viewMode is "month" | "twoWeeks" {
+  return viewMode === "month" || viewMode === "twoWeeks";
+}
+
+/** Columns in week-aligned views: 7, or 5 when weekends are hidden. */
+export function weekColumns(showWeekends: boolean): number {
+  return showWeekends ? 7 : 5;
+}
+
+/** Drop weekend days when the preference hides them. */
+function visibleDays(days: Date[], showWeekends: boolean): Date[] {
+  return showWeekends ? days : days.filter((day) => !isWeekend(day));
+}
+
+// ---------------------------------------------------------------------------
+// Scrolling views
+// ---------------------------------------------------------------------------
+
+/** A contiguous block of loaded weeks in a scrolling view. */
+export interface WeekWindow {
+  /** First day of the first week (always a week start). */
+  start: Date;
+  /** Number of weeks. */
+  count: number;
+}
+
+/** Weeks kept above the target week when (re)centring the window. */
+export const WINDOW_WEEKS_BEFORE = 8;
+/** Weeks loaded initially, including the target week and those above it. */
+export const WINDOW_INITIAL_WEEKS = 26;
+/** Weeks added per infinite-scroll step. */
+export const WINDOW_BLOCK_WEEKS = 8;
+/** Upper bound on loaded weeks (364 days < the API's 366-day limit). */
+export const WINDOW_MAX_WEEKS = 52;
+
+/** A fresh window positioned so `targetWeekStart` has a buffer above it. */
+export function windowAround(targetWeekStart: Date): WeekWindow {
+  return { start: addDays(targetWeekStart, -7 * WINDOW_WEEKS_BEFORE), count: WINDOW_INITIAL_WEEKS };
+}
+
+/** Grow the window upward by one block, capping its size (drops weeks at the bottom). */
+export function extendWindowStart(window: WeekWindow): WeekWindow {
+  return {
+    start: addDays(window.start, -7 * WINDOW_BLOCK_WEEKS),
+    count: Math.min(WINDOW_MAX_WEEKS, window.count + WINDOW_BLOCK_WEEKS),
+  };
+}
+
+/** Grow the window downward by one block, capping its size (drops weeks at the top). */
+export function extendWindowEnd(window: WeekWindow): WeekWindow {
+  const count = window.count + WINDOW_BLOCK_WEEKS;
+  if (count <= WINDOW_MAX_WEEKS) {
+    return { start: window.start, count };
   }
+  const trimmed = count - WINDOW_MAX_WEEKS;
+  return { start: addDays(window.start, 7 * trimmed), count: WINDOW_MAX_WEEKS };
+}
+
+/** Last day covered by a window. */
+export function windowEnd(window: WeekWindow): Date {
+  return addDays(window.start, window.count * 7 - 1);
+}
+
+/**
+ * The week a navigation target should bring to the top of the viewport:
+ * the week containing the 1st of the month in Month view, otherwise the
+ * week containing the date itself.
+ */
+export function targetWeekStart(viewMode: "month" | "twoWeeks", date: Date, weekStartsOn: WeekStart): Date {
+  return viewMode === "month" ? startOfWeek(startOfMonth(date), weekStartsOn) : startOfWeek(date, weekStartsOn);
+}
+
+/** Build one row per week of the window. */
+export function buildWeekRows(window: WeekWindow, preferences: LayoutPreferences): CalendarRow[] {
+  return Array.from({ length: window.count }, (_, index) => {
+    const weekStart = addDays(window.start, index * 7);
+    return {
+      key: toIsoDate(weekStart),
+      days: visibleDays(eachDay(weekStart, addDays(weekStart, 6)), preferences.showWeekends),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Paged views
+// ---------------------------------------------------------------------------
+
+/** The computed page for Week / N Days views. */
+export interface PagedLayout {
+  rangeStart: Date;
+  rangeEnd: Date;
+  rows: CalendarRow[];
+  columns: number;
+  /** Rows are calendar weeks, so a weekday header row makes sense. */
+  weekAligned: boolean;
+  title: string;
 }
 
 /**
  * Walk `count` working days (Mon–Fri) from `from` in `direction`, returning
- * the day reached. If `from` itself is a weekend it is skipped first, so the
- * result is always a working day.
+ * the day reached. A weekend `from` is first moved onto a working day.
  */
 function stepWorkingDays(from: Date, count: number, direction: 1 | -1): Date {
   let day = startOfDay(from);
@@ -112,65 +157,64 @@ function stepWorkingDays(from: Date, count: number, direction: 1 | -1): Date {
   return day;
 }
 
-/** Build the full {@link CalendarLayout} for the current state. */
-export function computeCalendarLayout(
-  viewMode: CalendarViewMode,
+/**
+ * Compute the Week or rolling N-Days page around `anchor`.
+ *
+ * - week → the anchor's week (7 or 5 columns, one row).
+ * - days → `customDayCount` days starting at the anchor, wrapping after 7
+ *   columns; with weekends hidden it counts *working* days.
+ */
+export function computePagedLayout(
+  viewMode: "week" | "days",
   anchor: Date,
   preferences: LayoutPreferences,
-): CalendarLayout {
-  const { start, end, weekAligned } = visibleRange(
-    viewMode,
-    anchor,
-    preferences.weekStartsOn,
-    preferences.customDayCount,
-    preferences.showWeekends,
-  );
+): PagedLayout {
+  if (viewMode === "week") {
+    const start = startOfWeek(anchor, preferences.weekStartsOn);
+    const end = addDays(start, 6);
+    return {
+      rangeStart: start,
+      rangeEnd: end,
+      rows: [{ key: toIsoDate(start), days: visibleDays(eachDay(start, end), preferences.showWeekends) }],
+      columns: weekColumns(preferences.showWeekends),
+      weekAligned: true,
+      title: formatDateRange(start, end),
+    };
+  }
 
-  const allDays = eachDay(start, end);
-  const workDays = preferences.showWeekends ? allDays : allDays.filter((day) => !isWeekend(day));
-  // Edge case: a 1–2 day "days" view landing on a weekend would be empty with
-  // weekends hidden; showing the weekend beats showing nothing.
-  const days = workDays.length > 0 ? workDays : allDays;
+  const start = startOfDay(anchor);
+  const end = preferences.showWeekends
+    ? addDays(start, preferences.customDayCount - 1)
+    : stepWorkingDays(start, preferences.customDayCount - 1, 1);
+  const all = eachDay(start, end);
+  const filtered = visibleDays(all, preferences.showWeekends);
+  // A 1–2 day page landing on a weekend would be empty with weekends hidden.
+  const days = filtered.length > 0 ? filtered : all;
+  const columns = Math.min(7, days.length);
 
-  // Week-aligned views keep weekdays in fixed columns: 7, or 5 when weekends
-  // are hidden (each full week contributes exactly 5 weekdays, so rows stay
-  // aligned). The rolling view simply wraps after 7 cells.
-  const columns = weekAligned ? (preferences.showWeekends ? 7 : 5) : Math.min(7, days.length);
-  const rows = Math.ceil(days.length / columns);
+  const rows: CalendarRow[] = [];
+  for (let index = 0; index < days.length; index += columns) {
+    const chunk = days.slice(index, index + columns);
+    rows.push({ key: toIsoDate(chunk[0]), days: chunk });
+  }
 
-  return {
-    rangeStart: start,
-    rangeEnd: end,
-    days,
-    columns,
-    rows,
-    weekAligned,
-    focusMonth: viewMode === "month" ? { year: anchor.getFullYear(), month: anchor.getMonth() } : null,
-    title: viewMode === "month" ? formatMonthYear(anchor) : formatDateRange(start, end),
-  };
+  return { rangeStart: start, rangeEnd: end, rows, columns, weekAligned: false, title: formatDateRange(start, end) };
 }
 
 /**
- * Move the anchor one "page" forward (`+1`) or backward (`-1`) for the
- * current view mode, i.e. what the toolbar arrows do.
+ * Move a paged view one page forward (`+1`) or backward (`-1`).
+ * The rolling view pages by exactly its own length, so pages never overlap.
  */
-export function shiftAnchor(
-  viewMode: CalendarViewMode,
+export function shiftPagedAnchor(
+  viewMode: "week" | "days",
   anchor: Date,
   direction: 1 | -1,
   preferences: LayoutPreferences,
 ): Date {
-  const { customDayCount, showWeekends } = preferences;
-  switch (viewMode) {
-    case "month":
-      return addMonths(anchor, direction);
-    case "twoWeeks":
-      return addDays(anchor, 14 * direction);
-    case "week":
-      return addDays(anchor, 7 * direction);
-    case "days":
-      // Page by exactly one window: N calendar days, or N working days when
-      // weekends are hidden (so consecutive pages never overlap or skip).
-      return showWeekends ? addDays(anchor, customDayCount * direction) : stepWorkingDays(anchor, customDayCount, direction);
+  if (viewMode === "week") {
+    return addDays(anchor, 7 * direction);
   }
+  return preferences.showWeekends
+    ? addDays(anchor, preferences.customDayCount * direction)
+    : stepWorkingDays(anchor, preferences.customDayCount, direction);
 }

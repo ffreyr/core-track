@@ -3,8 +3,10 @@
 Two tables back the whole application:
 
 * ``tasks``          – :class:`TaskItem`, a to-do entry anchored to a calendar
-  day and tagged with a planning scope (daily / weekly / monthly / yearly).
-* ``financial_logs`` – :class:`FinancialLog`, a single income or expense.
+  day (or a span of days) and tagged with a planning scope
+  (daily / weekly / monthly / yearly).
+* ``financial_logs`` – :class:`FinancialLog`, a single income or expense,
+  either already settled (``is_paid``) or planned for a future date.
 
 Money is stored as an integer number of minor units (cents/kuruş) in
 ``amount_cents``. Integers make SQL ``SUM`` exact and sidestep SQLite's lack of
@@ -12,6 +14,9 @@ a native decimal type; the :attr:`FinancialLog.amount` property converts to and
 from :class:`~decimal.Decimal` so the rest of the code works in major units.
 
 All timestamps are stored as UTC and returned as timezone-aware datetimes.
+
+Schema changes to existing databases are applied by :mod:`app.migrations`;
+whenever a column is added here, add a matching migration step there.
 """
 
 import enum
@@ -28,6 +33,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import Mapped, mapped_column
@@ -41,6 +47,10 @@ from app.database import Base
 
 #: Quantum used to round money values to two decimal places.
 _CENT = Decimal("0.01")
+
+#: Longest allowed multi-day task, in days (inclusive of both ends). Prevents
+#: a typo like end_date=2062 from injecting a task into thousands of buckets.
+MAX_TASK_SPAN_DAYS = 366
 
 
 def utcnow() -> datetime:
@@ -70,8 +80,8 @@ class UTCDateTime(TypeDecorator[datetime]):
     SQLite has no timezone support, so SQLAlchemy hands back naive datetimes.
     This decorator normalises every value to UTC before writing (stored naive)
     and re-attaches ``tzinfo=UTC`` when reading, so the API always emits ISO
-    timestamps with an explicit ``+00:00`` offset that JavaScript and Swift
-    parse unambiguously.
+    timestamps with an explicit offset that JavaScript and Swift parse
+    unambiguously.
     """
 
     impl = DateTime
@@ -101,8 +111,8 @@ class TaskScope(enum.StrEnum):
     """Planning horizon of a task.
 
     The scope does not change *where* the task appears on the calendar (that is
-    always ``due_date``); it lets clients filter and style tasks, e.g. showing
-    yearly goals in a separate lane from daily chores.
+    always ``due_date`` through ``end_date``); it lets clients filter and style
+    tasks, e.g. showing yearly goals in a separate lane from daily chores.
     """
 
     DAILY = "daily"
@@ -129,9 +139,17 @@ def _enum_values(enum_cls: type[enum.Enum]) -> list[str]:
 
 
 class TaskItem(Base):
-    """A to-do item displayed on the calendar on its ``due_date``.
+    """A to-do item displayed on the calendar from ``due_date`` to ``end_date``.
 
     Business rules:
+        * ``due_date`` is the first day of the task. ``end_date`` is the last
+          day of a multi-day task, or ``NULL`` for a single-day task; it is
+          never stored equal to ``due_date`` and never earlier than it (both
+          enforced in :mod:`app.crud`, which also caps the span at
+          :data:`MAX_TASK_SPAN_DAYS`). The range rule is validated in
+          application code rather than a CHECK constraint so databases
+          upgraded by ``ALTER TABLE`` (which cannot add constraints in SQLite)
+          and freshly created databases behave identically.
         * ``completed_at`` is set when the task is marked complete and cleared
           when it is reopened; it is never set by clients directly.
         * ``priority`` ranges from 0 (none) to 3 (high).
@@ -162,6 +180,7 @@ class TaskItem(Base):
         default=TaskScope.DAILY,
     )
     due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     is_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
@@ -171,18 +190,41 @@ class TaskItem(Base):
         UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow, index=True
     )
 
+    @property
+    def last_date(self) -> date:
+        """Last calendar day the task occupies (``due_date`` for single-day tasks)."""
+        return self.end_date or self.due_date
+
+    @property
+    def span_days(self) -> int:
+        """Number of calendar days the task covers, inclusive (1 for single-day)."""
+        return (self.last_date - self.due_date).days + 1
+
+    @property
+    def is_multi_day(self) -> bool:
+        """``True`` when the task spans more than one day."""
+        return self.span_days > 1
+
     def __repr__(self) -> str:
-        return f"<TaskItem id={self.id} scope={self.scope} due={self.due_date} title={self.title!r}>"
+        return (
+            f"<TaskItem id={self.id} scope={self.scope} due={self.due_date} "
+            f"end={self.end_date} title={self.title!r}>"
+        )
 
 
 class FinancialLog(Base):
-    """A single income or expense entry.
+    """A single income or expense entry, settled or planned.
 
     Business rules:
         * The stored amount is always strictly positive; whether it adds to or
           subtracts from the balance is decided by ``kind``.
-        * ``occurred_on`` is the calendar day the money moved, which is the day
-          the entry appears on in the calendar grid.
+        * ``occurred_on`` is the calendar day the money moves (or is due to
+          move), which is the day the entry appears on in the calendar grid.
+        * ``is_paid`` distinguishes settled transactions (``True``, the
+          default) from planned ones (``False``): e.g. a credit-card minimum
+          due on the 14th, or a salary expected at month end. Planned entries
+          count toward the month's expected totals but are reported
+          separately as "pending" so the user can see what is still owed.
         * ``currency`` is an ISO-4217 code. Aggregations sum amounts as-is, so
           mixing currencies in one month will produce a meaningless total —
           acceptable for a single-user, single-currency setup.
@@ -211,6 +253,9 @@ class FinancialLog(Base):
     category: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     occurred_on: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    # server_default mirrors the migration's "DEFAULT 1" so fresh and upgraded
+    # databases have identical column definitions.
+    is_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("1"))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow, index=True
@@ -227,7 +272,8 @@ class FinancialLog(Base):
         self.amount_cents = decimal_to_cents(value)
 
     def __repr__(self) -> str:
+        status = "paid" if self.is_paid else "pending"
         return (
             f"<FinancialLog id={self.id} {self.kind} {self.amount} {self.currency} "
-            f"on={self.occurred_on} category={self.category!r}>"
+            f"on={self.occurred_on} {status} category={self.category!r}>"
         )

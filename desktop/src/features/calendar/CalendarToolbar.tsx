@@ -63,7 +63,7 @@ export function CalendarToolbar({
       </div>
 
       {totals ? (
-        <div className="toolbar__stats" aria-label="Totals for the visible range">
+        <div className="toolbar__stats" aria-label="Totals for the period in view">
           <span className="stat">
             <span className="stat__label">Open</span>
             <span className="stat__value">{totals.open_task_count}</span>
@@ -82,6 +82,14 @@ export function CalendarToolbar({
                 <span className="stat__label">Out</span>
                 <span className="stat__value is-negative">{formatMoney(totals.expense_total, currency, { compact: true })}</span>
               </span>
+              {totals.pending_expense_total > 0 ? (
+                <span className="stat" title="Planned expenses not yet paid (included in Out)">
+                  <span className="stat__label">Pending</span>
+                  <span className="stat__value is-pending">
+                    {formatMoney(totals.pending_expense_total, currency, { compact: true })}
+                  </span>
+                </span>
+              ) : null}
               <span className="stat">
                 <span className="stat__label">Net</span>
                 <span className={totals.net >= 0 ? "stat__value is-positive" : "stat__value is-negative"}>

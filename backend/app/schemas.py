@@ -22,7 +22,7 @@ from typing import Annotated, ClassVar, Self
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 
-from app.models import FinanceKind, TaskScope
+from app.models import MAX_TASK_SPAN_DAYS, FinanceKind, TaskScope
 
 # ---------------------------------------------------------------------------
 # Reusable field types
@@ -85,18 +85,49 @@ class _PatchModel(_InputModel):
 
 
 class TaskCreate(_InputModel):
-    """Payload for creating a task."""
+    """Payload for creating a task.
+
+    ``end_date`` turns the task into a multi-day block (Google Calendar style)
+    covering ``due_date`` through ``end_date`` inclusive. Omit it, or send the
+    same day as ``due_date``, for a single-day task.
+    """
 
     title: TaskTitle
     description: LongText | None = None
     scope: TaskScope = TaskScope.DAILY
     due_date: date
+    end_date: date | None = None
     priority: Priority = 1
     color: HexColor | None = None
+
+    @model_validator(mode="after")
+    def _validate_date_range(self) -> Self:
+        """Enforce ``due_date <= end_date`` and the maximum span.
+
+        An ``end_date`` equal to ``due_date`` is normalised to ``None`` so a
+        single-day task always has exactly one representation.
+        """
+        if self.end_date is not None:
+            if self.end_date < self.due_date:
+                raise ValueError("end_date cannot be before due_date")
+            if (self.end_date - self.due_date).days + 1 > MAX_TASK_SPAN_DAYS:
+                raise ValueError(f"A task can span at most {MAX_TASK_SPAN_DAYS} days")
+            if self.end_date == self.due_date:
+                self.end_date = None
+        return self
 
 
 class TaskUpdate(_PatchModel):
     """Partial update for a task.
+
+    Date semantics (mirroring how calendar apps behave):
+        * Sending only ``due_date`` *moves* the task; a multi-day task keeps
+          its length (``end_date`` shifts by the same number of days).
+        * Sending ``end_date`` *resizes* the task; ``null`` makes it a
+          single-day task again.
+        * Sending both sets the range explicitly.
+    The resulting range is validated in :func:`app.crud.update_task` because
+    it depends on the task's current values.
 
     ``is_completed`` may be set here as well as via the dedicated toggle
     endpoint; either way the server maintains ``completed_at``.
@@ -110,13 +141,19 @@ class TaskUpdate(_PatchModel):
     description: LongText | None = None
     scope: TaskScope | None = None
     due_date: date | None = None
+    end_date: date | None = None
     priority: Priority | None = None
     color: HexColor | None = None
     is_completed: bool | None = None
 
 
 class TaskRead(BaseModel):
-    """A task as returned by the API."""
+    """A task as returned by the API.
+
+    ``end_date`` is ``null`` for single-day tasks; ``span_days`` is always
+    present (1 for single-day tasks) so clients can size calendar bars
+    without date arithmetic.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -125,6 +162,8 @@ class TaskRead(BaseModel):
     description: str | None
     scope: TaskScope
     due_date: date
+    end_date: date | None
+    span_days: int
     priority: int
     color: str | None
     is_completed: bool
@@ -139,7 +178,11 @@ class TaskRead(BaseModel):
 
 
 class FinanceCreate(_InputModel):
-    """Payload for recording an income or expense."""
+    """Payload for recording an income or expense.
+
+    Set ``is_paid`` to ``false`` to plan a future payment (or expected
+    income); it then appears as "pending" until marked paid.
+    """
 
     kind: FinanceKind
     amount: PositiveAmount
@@ -147,13 +190,14 @@ class FinanceCreate(_InputModel):
     category: CategoryName
     description: LongText | None = None
     occurred_on: date
+    is_paid: bool = True
 
 
 class FinanceUpdate(_PatchModel):
     """Partial update for a financial log."""
 
     NON_NULLABLE: ClassVar[frozenset[str]] = frozenset(
-        {"kind", "amount", "currency", "category", "occurred_on"}
+        {"kind", "amount", "currency", "category", "occurred_on", "is_paid"}
     )
 
     kind: FinanceKind | None = None
@@ -162,6 +206,7 @@ class FinanceUpdate(_PatchModel):
     category: CategoryName | None = None
     description: LongText | None = None
     occurred_on: date | None = None
+    is_paid: bool | None = None
 
 
 class FinanceRead(BaseModel):
@@ -176,43 +221,80 @@ class FinanceRead(BaseModel):
     category: str
     description: str | None
     occurred_on: date
+    is_paid: bool
     created_at: datetime
     updated_at: datetime
 
 
 class CategoryBreakdown(BaseModel):
-    """Total and entry count for one ``(category, kind)`` pair in a period."""
+    """Totals for one ``(category, kind)`` pair in a period.
+
+    ``total`` = ``paid_total`` + ``pending_total``.
+    """
 
     category: str
     kind: FinanceKind
     total: Money
+    paid_total: Money
+    pending_total: Money
     count: int
 
 
 class DailyNet(BaseModel):
-    """Income, expense and net for a single day (one point of a chart series)."""
+    """Income, expense and net for a single day (one point of a chart series).
+
+    ``income``/``expense`` include pending entries; the ``*_pending`` fields
+    show how much of each is still planned rather than settled.
+    """
 
     date: date
     income: Money
     expense: Money
     net: Money
+    income_pending: Money
+    expense_pending: Money
 
 
 class FinanceSummary(BaseModel):
-    """Monthly roll-up powering the finance tab.
+    """Monthly cash-flow roll-up powering the finance tab.
+
+    Totals, all for the requested month:
+
+    * ``income_total``      – all expected income (received + pending).
+    * ``income_received``   – income already received.
+    * ``income_pending``    – income still expected.
+    * ``expense_total``     – all expenses (paid + pending).
+    * ``expense_paid``      – expenses already paid.
+    * ``expense_pending``   – planned expenses not yet paid.
+    * ``remaining_budget``  – ``income_total − expense_paid − expense_pending``:
+      what is left of this month's income once every known obligation is
+      covered. Numerically equal to ``net``; exposed under its own name
+      because it is the headline figure of the cash-flow view.
+    * ``cash_balance``      – ``income_received − expense_paid``: money that
+      has actually moved so far this month.
 
     ``daily`` contains one entry for *every* day of the month, including days
     with no activity, so clients can plot it without filling gaps.
+    ``pending`` lists the month's unpaid entries in date order, ready for an
+    "upcoming payments" checklist.
     """
 
     year: int
     month: int
     income_total: Money
+    income_received: Money
+    income_pending: Money
     expense_total: Money
+    expense_paid: Money
+    expense_pending: Money
     net: Money
+    remaining_budget: Money
+    cash_balance: Money
     entry_count: int
+    pending_count: int
     by_category: list[CategoryBreakdown]
     daily: list[DailyNet]
+    pending: list[FinanceRead]
 
 
 # ---------------------------------------------------------------------------
@@ -221,23 +303,34 @@ class FinanceSummary(BaseModel):
 
 
 class CalendarDay(BaseModel):
-    """Everything the calendar grid needs to render one cell."""
+    """Everything the calendar grid needs to render one cell.
+
+    Multi-day tasks appear in the ``tasks`` list of *every* day they cover,
+    always before single-day tasks and in a stable order (earliest start,
+    then longest span, then id), so clients can stack them into consistent
+    horizontal lanes.
+    """
 
     date: date
     tasks: list[TaskRead]
     finance: list[FinanceRead]
     income_total: Money
     expense_total: Money
+    pending_expense_total: Money
     net: Money
     open_task_count: int
     completed_task_count: int
 
 
 class CalendarTotals(BaseModel):
-    """Totals across the whole requested range (e.g. a month header)."""
+    """Totals across the whole requested range (e.g. a month header).
+
+    Task counts count each task once, even if it spans several days.
+    """
 
     income_total: Money
     expense_total: Money
+    pending_expense_total: Money
     net: Money
     task_count: int
     open_task_count: int

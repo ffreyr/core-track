@@ -25,6 +25,8 @@ export interface OpenFinanceOptions {
   log?: FinanceLog;
   date?: IsoDate;
   kind?: FinanceKind;
+  /** `false` opens the editor for a planned (pending) entry. */
+  paid?: boolean;
 }
 
 /**
@@ -79,6 +81,7 @@ export function EditorsProvider({ children }: { children: ReactNode }) {
           log={editor.options.log}
           defaultDate={editor.options.date ?? fallbackDate}
           defaultKind={editor.options.kind}
+          defaultPaid={editor.options.paid}
           onClose={close}
         />
       ) : null}

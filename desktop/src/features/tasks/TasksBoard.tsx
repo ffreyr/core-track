@@ -154,7 +154,7 @@ export function TasksBoard({ anchor, onAnchorChange }: TasksBoardProps) {
                           {task.title}
                         </span>
                         <span className="item-row__meta">
-                          Due {formatShortDay(parseIsoDate(task.due_date))}
+                          Due {task.end_date ? formatDateRange(parseIsoDate(task.due_date), parseIsoDate(task.end_date)) : formatShortDay(parseIsoDate(task.due_date))}
                           {task.priority > 0 ? ` · ${PRIORITY_LABELS[task.priority]}` : ""}
                         </span>
                       </button>

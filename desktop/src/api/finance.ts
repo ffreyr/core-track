@@ -47,14 +47,20 @@ export const financeApi = {
     return request<FinanceLog>("PATCH", `/finance/${id}`, { body: serializeBody(patch) });
   },
 
+  /** Flip an entry between paid and pending (the "mark as paid" checkbox). */
+  togglePaid(id: number): Promise<FinanceLog> {
+    return request<FinanceLog>("POST", `/finance/${id}/toggle-paid`);
+  },
+
   /** Permanently delete a financial log. */
   remove(id: number): Promise<void> {
     return request<void>("DELETE", `/finance/${id}`);
   },
 
   /**
-   * Monthly roll-up: totals, per-category breakdown and a zero-filled daily
-   * series for the given month (1–12).
+   * Monthly cash-flow roll-up for the given month (1–12): expected income,
+   * paid and pending expenses, remaining budget, per-category paid/pending
+   * breakdown, a zero-filled daily series and the list of unpaid entries.
    */
   summary(year: number, month: number, signal?: AbortSignal): Promise<FinanceSummary> {
     return request<FinanceSummary>("GET", "/finance/summary", { query: { year, month }, signal });

@@ -121,14 +121,29 @@ def get_db() -> Iterator[Session]:
         db.close()
 
 
+def _database_file(engine_: Engine) -> Path | None:
+    """Return the on-disk path of a file-based SQLite database, else ``None``."""
+    url = engine_.url
+    if url.get_backend_name() != "sqlite" or _is_in_memory(url) or not url.database:
+        return None
+    return Path(url.database).expanduser().resolve()
+
+
 def init_db() -> None:
-    """Create any tables that do not exist yet.
+    """Create or upgrade the database schema; safe to call on every startup.
+
+    * A new, empty database is created at the latest schema.
+    * An existing database is upgraded in place by :mod:`app.migrations`
+      (after a backup to ``data/backups/``), because ``create_all`` alone
+      never adds columns to tables that already exist.
 
     Importing :mod:`app.models` registers every model on ``Base.metadata``.
-    ``create_all`` is idempotent: existing tables are left untouched, so this
-    is safe to call on every startup. Schema *changes* to existing tables will
-    need a migration tool (Alembic) once the data model stabilises.
     """
     from app import models  # noqa: F401  (import registers the ORM models)
+    from app.migrations import run_migrations
 
-    Base.metadata.create_all(bind=engine)
+    run_migrations(
+        engine,
+        lambda engine_: Base.metadata.create_all(bind=engine_),
+        _database_file(engine),
+    )

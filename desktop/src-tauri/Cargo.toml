@@ -1,6 +1,6 @@
 [package]
 name = "core-track"
-version = "0.1.0"
+version = "0.2.5"
 description = "Core-Track desktop client"
 authors = ["Arda Kaya"]
 edition = "2021"

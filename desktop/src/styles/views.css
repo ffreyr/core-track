@@ -1,8 +1,6 @@
 /*
- * Tasks board, Finance tab and Settings tab.
+ * Tasks board, Finance tab (cash-flow projection) and Settings tab.
  */
-
-/* ---- Tasks board ------------------------------------------------------- */
 
 .tasks-board,
 .finance-view,
@@ -17,6 +15,8 @@
 .finance-view > .notice {
   margin: 10px 18px 0;
 }
+
+/* ---- Tasks board ------------------------------------------------------- */
 
 .lanes {
   display: grid;
@@ -48,19 +48,19 @@
 }
 
 .lane__header h2 {
-  font-size: 15px;
+  font-size: 16px;
 }
 
 .lane__period {
   margin: 2px 0 0;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .lane__count {
   margin: 0;
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: 12.5px;
 }
 
 .progress {
@@ -76,7 +76,7 @@
   transition: width 0.3s ease;
 }
 
-/* ---- Finance ----------------------------------------------------------- */
+/* ---- Finance: layout --------------------------------------------------- */
 
 .finance-scroll,
 .settings-scroll {
@@ -85,13 +85,177 @@
   flex-direction: column;
   gap: 14px;
   min-height: 0;
-  padding: 16px 18px 24px;
+  padding: 16px 18px 28px;
   overflow-y: auto;
 }
 
 .settings-scroll {
-  max-width: 760px;
+  max-width: 780px;
 }
+
+.finance-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 14px;
+  align-items: start;
+}
+
+.finance-columns__main,
+.finance-columns__side {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ---- Finance: remaining budget hero ------------------------------------ */
+
+.budget-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px 24px;
+  padding: 20px 22px;
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--positive);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.budget-hero.is-overspent {
+  border-left-color: var(--negative);
+}
+
+.budget-hero--placeholder {
+  min-height: 170px;
+  border-left-color: var(--border);
+}
+
+.budget-hero__main,
+.budget-hero__side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.budget-hero__side {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.budget-hero__side strong {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-hero__label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.budget-hero__value {
+  font-size: 36px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--positive);
+}
+
+.budget-hero.is-overspent .budget-hero__value {
+  color: var(--negative);
+}
+
+.budget-hero__explain,
+.budget-hero__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-hero__warning {
+  margin: 4px 0 0;
+  color: var(--negative);
+  font-weight: 600;
+}
+
+.budget-bar {
+  grid-column: 1 / -1;
+}
+
+.budget-bar__track {
+  position: relative;
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 7px;
+  background: var(--surface-2);
+}
+
+.budget-bar__segment {
+  height: 100%;
+  transition: width 0.35s ease;
+}
+
+.budget-bar__segment.is-paid,
+.legend-swatch.is-paid {
+  background: var(--negative);
+}
+
+.budget-bar__segment.is-pending,
+.legend-swatch.is-pending {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--pending) 0 5px,
+    color-mix(in srgb, var(--pending) 45%, transparent) 5px 10px
+  );
+}
+
+.budget-bar__segment.is-remaining,
+.legend-swatch.is-remaining {
+  background: var(--positive);
+}
+
+.budget-bar__marker {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 3px;
+  margin-left: -1px;
+  background: var(--text);
+}
+
+.budget-bar__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.budget-bar__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.budget-bar__share {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+
+/* ---- Finance: KPI cards ------------------------------------------------ */
 
 .summary-cards {
   display: grid;
@@ -109,128 +273,115 @@
   background: var(--surface);
 }
 
+.summary-card--pending {
+  border-color: color-mix(in srgb, var(--pending) 45%, var(--border));
+  background: color-mix(in srgb, var(--pending) 5%, var(--surface));
+}
+
 .summary-card strong {
-  font-size: 22px;
+  font-size: 24px;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
 }
 
 .summary-card__hint {
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
 }
 
-.chart {
+/* ---- Finance: balance chart -------------------------------------------- */
+
+.balance-chart {
   margin: 0;
 }
 
-.chart--placeholder {
-  height: 160px;
+.balance-chart--placeholder {
+  height: 200px;
   border-radius: var(--radius-sm);
   background: var(--surface-2);
 }
 
-.chart__svg {
-  display: block;
-  width: 100%;
-  height: 160px;
+.balance-chart__legend {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
-.chart__baseline {
+.balance-chart__legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.legend-line {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top: 2.5px solid var(--accent);
+}
+
+.legend-line.is-projected {
+  border-top-style: dashed;
+  border-top-color: var(--text-muted);
+}
+
+.balance-chart__svg {
+  display: block;
+  width: 100%;
+  height: 170px;
+}
+
+.balance-chart__zero {
   stroke: var(--border-strong);
   stroke-width: 1;
   vector-effect: non-scaling-stroke;
 }
 
-.chart__hit {
-  fill: transparent;
+.balance-chart__today {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
 }
 
-.chart__day {
+.balance-chart__line {
+  fill: none;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.balance-chart__line.is-actual {
+  stroke: var(--accent);
+}
+
+.balance-chart__line.is-projected {
+  stroke: var(--text-muted);
+  stroke-dasharray: 6 5;
+}
+
+.balance-chart__hit {
+  fill: transparent;
   cursor: pointer;
 }
 
-.chart__day:hover .chart__hit {
-  fill: var(--surface-hover);
+.balance-chart__hit:hover {
+  fill: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
-.chart__bar.is-positive {
-  fill: var(--positive);
-}
-
-.chart__bar.is-negative {
-  fill: var(--negative);
-}
-
-.chart__today {
-  fill: var(--accent);
-}
-
-.chart__axis {
+.balance-chart__axis {
   display: flex;
   justify-content: space-between;
   margin-top: 6px;
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12px;
 }
 
-.breakdown-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 28px;
-}
-
-.breakdown h3 {
-  margin-bottom: 10px;
-  font-size: 13px;
-}
-
-.breakdown ul {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.breakdown__label {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.breakdown__label strong {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-}
-
-.breakdown__count {
-  color: var(--text-faint);
-  font-size: 11px;
-}
-
-.breakdown__track {
-  height: 6px;
-  overflow: hidden;
-  border-radius: 3px;
-  background: var(--surface-2);
-}
-
-.breakdown__bar {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.breakdown__bar.is-income {
-  background: var(--positive);
-}
-
-.breakdown__bar.is-expense {
-  background: var(--negative);
-}
+/* ---- Finance: ledger & tables ------------------------------------------ */
 
 .table {
   width: 100%;
@@ -238,10 +389,10 @@
 }
 
 .table th {
-  padding: 6px 8px;
+  padding: 7px 8px;
   border-bottom: 1px solid var(--border);
   color: var(--text-faint);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   text-align: left;
   text-transform: uppercase;
@@ -249,8 +400,9 @@
 }
 
 .table td {
-  padding: 8px;
+  padding: 9px 8px;
   border-bottom: 1px solid var(--border);
+  vertical-align: middle;
 }
 
 .table__row--clickable {
@@ -272,12 +424,143 @@
   color: var(--text-muted);
 }
 
+.ledger tr.is-pending td {
+  background: color-mix(in srgb, var(--pending) 6%, transparent);
+}
+
+.ledger tr.is-pending .table__num:not(:last-child) {
+  font-style: italic;
+}
+
+.ledger tr.is-overdue td {
+  background: var(--negative-soft);
+}
+
+.ledger__category {
+  display: block;
+  font-weight: 500;
+}
+
+.ledger__note {
+  display: block;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.ledger__today td {
+  padding: 0;
+  border-bottom: 2px solid var(--accent);
+}
+
+.ledger__today span {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 6px 6px 0 0;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--pending);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.status-toggle.is-paid {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.status-toggle input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* ---- Finance: category split ------------------------------------------- */
+
+.breakdown ul {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breakdown__label {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.breakdown__label strong {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.breakdown__count {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.breakdown__track {
+  display: flex;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+
+.breakdown__bar {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.breakdown__bar.is-income {
+  background: var(--positive);
+}
+
+.breakdown__bar.is-expense {
+  background: var(--negative);
+}
+
+.breakdown__bar.is-pending {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--pending) 0 4px,
+    color-mix(in srgb, var(--pending) 45%, transparent) 4px 8px
+  );
+}
+
+.breakdown__pending {
+  display: block;
+  margin-top: 3px;
+  color: var(--pending);
+  font-size: 12px;
+}
+
 /* ---- Responsive tweaks for narrower windows ---------------------------- */
 
-@media (max-width: 1180px) {
+@media (max-width: 1240px) {
   .toolbar__stats {
     order: 3;
     width: 100%;
+  }
+
+  .finance-columns {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .lanes {

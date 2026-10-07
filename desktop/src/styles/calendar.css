@@ -1,11 +1,12 @@
 /*
- * Calendar grid, cells, chips, day panel and the view-options popover.
+ * Calendar: grid, scroll container, layered week rows, multi-day bars,
+ * chips, day panel and the view-options popover.
  *
- * The grid is driven by two custom properties set from the layout engine:
- *   --cols  number of columns (1–7)
- *   --rows  number of week rows
- * Rows share the available height equally but never shrink below the
- * density's minimum height; past that, the cell area scrolls.
+ * Sizing note: row heights, item heights, gaps and the header track come
+ * from ROW_METRICS in features/calendar/metrics.ts and are applied inline
+ * (grid-template-rows, height) or via custom properties (--item-height,
+ * --item-gap, --more-height, --row-padding-bottom). Do not hard-code those
+ * sizes here, or the "+N more" calculation will drift from the rendering.
  */
 
 .calendar-view {
@@ -26,11 +27,10 @@
   min-height: 0;
 }
 
-/* ---- Grid -------------------------------------------------------------- */
+/* ---- Grid & scroll container ------------------------------------------- */
 
 .calendar-grid {
-  /* --row-min and --chip-height are set inline from DENSITY_METRICS (CalendarGrid.tsx). */
-  --chip-font: 12px;
+  --chip-font: 13px;
 
   display: flex;
   flex: 1;
@@ -41,7 +41,7 @@
 }
 
 .calendar-grid.density-compact {
-  --chip-font: 11px;
+  --chip-font: 12px;
 }
 
 .calendar-grid.is-loading {
@@ -50,151 +50,263 @@
 
 .calendar-grid__weekdays {
   display: grid;
-  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  flex-shrink: 0;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
 
 .calendar-grid__weekday {
-  padding: 6px 10px;
-  font-size: 11px;
+  padding: 7px 10px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-faint);
 }
 
-.calendar-grid__cells {
-  display: grid;
+.calendar-grid__scroller {
+  /* position: relative makes row offsetTop relative to this container. */
+  position: relative;
   flex: 1;
-  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
-  grid-template-rows: repeat(var(--rows), minmax(var(--row-min), 1fr));
   min-height: 0;
   overflow-y: auto;
-  background: var(--border);
-  gap: 1px;
+  overscroll-behavior: contain;
+  background: var(--surface);
 }
 
-/* ---- Cell -------------------------------------------------------------- */
+.calendar-grid__sentinel {
+  height: 1px;
+}
 
-.calendar-cell {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-  min-height: 0;
-  padding: 6px 6px 8px;
-  background: var(--surface);
+/* ---- Week row (layered CSS grid) --------------------------------------- */
+
+.calendar-week {
+  position: relative;
+  display: grid;
+  border-bottom: 1px solid var(--border);
   cursor: default;
+}
+
+/* Layer 1: day backgrounds span every track of their column. */
+.calendar-day-bg {
+  z-index: 0;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
   transition: background 0.1s, box-shadow 0.1s;
 }
 
-.calendar-cell:hover {
-  background: var(--surface-hover);
-}
-
-.calendar-cell.is-outside {
+.calendar-day-bg.is-outside {
   background: var(--surface-2);
 }
 
-.calendar-cell.is-outside .calendar-cell__number {
-  color: var(--text-faint);
+.calendar-day-bg.is-today {
+  background: color-mix(in srgb, var(--today) 5%, var(--surface));
 }
 
-.calendar-cell.is-selected {
+.calendar-day-bg.is-selected {
   background: var(--selected);
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
-.calendar-cell.is-drop-target {
+.calendar-day-bg.is-drop-target {
   background: var(--drop-target);
   outline: 2px dashed var(--accent);
   outline-offset: -4px;
 }
 
-.calendar-cell__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-  min-height: 22px;
-}
-
-.calendar-cell__date {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+/* Everything drawn on top of the backgrounds. */
+.calendar-day-header,
+.task-bar,
+.calendar-day-items {
+  position: relative;
+  z-index: 1;
   min-width: 0;
 }
 
-.calendar-cell__number {
+/* Layer 2: day header (date number, net badge). */
+.calendar-day-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 5px 7px 0;
+  pointer-events: none; /* Clicks fall through to the row (select day). */
+}
+
+.calendar-day-header__date {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.calendar-day-header__number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 4px;
-  border-radius: 11px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  border-radius: 12px;
+  font-size: 14px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.calendar-cell.is-today .calendar-cell__number {
+.calendar-day-header.is-outside .calendar-day-header__number {
+  color: var(--text-faint);
+}
+
+.calendar-day-header__number.is-today {
   background: var(--today);
   color: var(--accent-text);
 }
 
-.calendar-cell__weekday,
-.calendar-cell__month {
-  font-size: 11px;
+.calendar-day-header__weekday,
+.calendar-day-header__month {
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
-.calendar-cell__net {
+.calendar-day-header__net {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   overflow: hidden;
-  padding: 1px 6px;
-  border-radius: 9px;
-  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.calendar-cell__net.is-positive {
+.calendar-day-header__net.is-positive {
   background: var(--positive-soft);
 }
 
-.calendar-cell__net.is-negative {
+.calendar-day-header__net.is-negative {
   background: var(--negative-soft);
 }
 
-.calendar-cell__items {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 3px;
-  min-height: 0;
-  overflow-y: auto;
+.pending-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pending);
 }
 
-.calendar-cell__more {
+/* Layer 3: multi-day bars spanning columns. */
+.task-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  align-self: start;
+  height: var(--item-height);
+  margin: 0 5px;
+  padding: 0 7px;
+  border-radius: 5px;
+  background: var(--chip-accent);
+  color: #fff;
+  font-size: var(--chip-font);
+  font-weight: 600;
+  cursor: grab;
+  box-shadow: var(--shadow-sm);
+}
+
+.task-bar:active {
+  cursor: grabbing;
+}
+
+/* Flat edges where the task continues into the previous/next row. */
+.task-bar.continues-before {
+  margin-left: 0;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.task-bar.continues-after {
+  margin-right: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.task-bar.is-done {
+  opacity: 0.5;
+}
+
+.task-bar.is-done .task-bar__label {
+  text-decoration: line-through;
+}
+
+.task-bar__label {
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.task-bar__arrow {
+  flex-shrink: 0;
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+.task-bar .chip__check {
+  accent-color: #fff;
+}
+
+.task-bar .scope-badge {
+  background: rgba(255, 255, 255, 0.28) !important;
+  min-width: 16px;
+  height: 16px;
+  font-size: 10px;
+}
+
+/* Layer 4: per-day single-day items. */
+.calendar-day-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--item-gap);
+  min-height: 0;
+  padding: 0 6px var(--row-padding-bottom);
+  overflow: hidden;
+}
+
+/* Single-row paged views list everything; the row grows instead of clipping. */
+.calendar-week.is-fill .calendar-day-items {
+  overflow: visible;
+}
+
+.calendar-day-items__more {
   align-self: flex-start;
   flex-shrink: 0;
-  height: 18px; /* MORE_ROW in CalendarGrid.tsx */
-  padding: 0 6px;
+  height: var(--more-height);
+  padding: 0 7px;
   border: none;
   border-radius: 4px;
   background: transparent;
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
 }
 
-.calendar-cell__more:hover {
+.calendar-day-items__more:hover {
   background: var(--surface-2);
   color: var(--text);
 }
@@ -205,10 +317,10 @@
   display: flex;
   flex-shrink: 0;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  height: var(--chip-height);
-  padding: 0 5px;
+  height: var(--item-height);
+  padding: 0 6px;
   border: none;
   border-radius: 5px;
   font-size: var(--chip-font);
@@ -223,7 +335,7 @@
 .chip--task {
   /* Accent strip on the left + a faint tint of the same color. */
   border-left: 3px solid var(--chip-accent);
-  background: color-mix(in srgb, var(--chip-accent) 12%, var(--surface));
+  background: color-mix(in srgb, var(--chip-accent) 13%, var(--surface));
 }
 
 .chip--task.is-high-priority .chip__label {
@@ -240,8 +352,8 @@
 
 .chip__check {
   flex-shrink: 0;
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
   margin: 0;
   cursor: pointer;
 }
@@ -261,9 +373,9 @@
 }
 
 .chip--task .scope-badge {
-  min-width: 14px;
-  height: 14px;
-  font-size: 9px;
+  min-width: 16px;
+  height: 16px;
+  font-size: 10px;
 }
 
 .chip--finance {
@@ -279,6 +391,14 @@
 .chip--expense {
   background: var(--negative-soft);
   color: var(--negative);
+}
+
+/* Planned entries: dashed outline, amber tint. */
+.chip--finance.is-pending {
+  background: transparent;
+  outline: 1.5px dashed currentColor;
+  outline-offset: -1.5px;
+  color: var(--pending);
 }
 
 .chip__amount {
@@ -300,7 +420,7 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  width: 320px;
+  width: 340px;
   flex-shrink: 0;
   padding: 16px;
   overflow-y: auto;
@@ -324,7 +444,7 @@
 }
 
 .day-panel__header h2 {
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.3;
 }
 
@@ -358,23 +478,23 @@
 }
 
 .day-panel__section h3 {
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .day-panel__hint {
   margin: auto 0 0;
   color: var(--text-faint);
-  font-size: 11.5px;
+  font-size: 12.5px;
 }
 
 /* ---- View options popover ---------------------------------------------- */
 
 .settings-popover {
   position: absolute;
-  top: 60px;
+  top: 64px;
   right: 18px;
   z-index: 20;
-  width: 560px;
+  width: 600px;
   max-width: calc(100% - 36px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -396,7 +516,7 @@
 }
 
 .settings-popover__header h2 {
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .settings-popover__footer {
@@ -418,7 +538,7 @@
 }
 
 .settings-group h3 {
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--text-faint);
@@ -443,11 +563,11 @@
 }
 
 .scope-filter__item {
-  height: 24px;
-  padding: 0 10px;
+  height: 26px;
+  padding: 0 11px;
   border: 1.5px solid;
-  border-radius: 12px;
-  font-size: 12px;
+  border-radius: 13px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }

@@ -45,6 +45,8 @@ export const CATEGORY_SUGGESTIONS: Record<FinanceKind, readonly string[]> = {
   income: ["Salary", "Freelance", "Bonus", "Investment", "Gift", "Refund", "Other"],
   expense: [
     "Rent",
+    "Credit card",
+    "Loan",
     "Groceries",
     "Dining",
     "Transport",

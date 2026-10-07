@@ -2,8 +2,13 @@
  * Create / edit dialog for a task.
  *
  * In create mode the date and scope are prefilled from where the user
- * clicked (a calendar cell, a Tasks-board lane). In edit mode every field is
+ * clicked (a calendar day, a Tasks-board lane). In edit mode every field is
  * editable, including completion, and the task can be deleted.
+ *
+ * Multi-day tasks: an optional "Until" date turns the task into a block
+ * spanning several days on the calendar. Clearing it (or choosing the same
+ * day) makes it a single-day task again. Moving the start date keeps the
+ * task's length, mirroring drag-and-drop on the calendar.
  */
 
 import { useState, type FormEvent } from "react";
@@ -12,6 +17,7 @@ import { api, TASK_SCOPES, type IsoDate, type Task, type TaskPriority, type Task
 import { ConfirmDeleteButton, Field, SegmentedControl } from "../../components/controls";
 import { Modal } from "../../components/Modal";
 import { useApiAction } from "../../hooks/useApi";
+import { addDays, diffInDays, parseIsoDate, toIsoDate } from "../../lib/dates";
 import { PRIORITY_LABELS, SCOPE_META, TASK_COLOR_SWATCHES } from "../../lib/labels";
 
 export interface TaskEditorProps {
@@ -26,6 +32,9 @@ export interface TaskEditorProps {
 
 const PRIORITIES: readonly TaskPriority[] = [0, 1, 2, 3];
 
+/** Longest allowed span, matching the backend's MAX_TASK_SPAN_DAYS. */
+const MAX_SPAN_DAYS = 366;
+
 export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose }: TaskEditorProps) {
   const run = useApiAction();
   const isEdit = task !== undefined;
@@ -34,11 +43,25 @@ export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose 
   const [description, setDescription] = useState(task?.description ?? "");
   const [scope, setScope] = useState<TaskScope>(task?.scope ?? defaultScope);
   const [dueDate, setDueDate] = useState<IsoDate>(task?.due_date ?? defaultDate);
+  const [endDate, setEndDate] = useState<IsoDate>(task?.end_date ?? "");
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? 1);
   const [color, setColor] = useState<string | null>(task?.color ?? null);
   const [isCompleted, setIsCompleted] = useState(task?.is_completed ?? false);
   const [saving, setSaving] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
+  const [rangeError, setRangeError] = useState<string | null>(null);
+
+  const spanDays = endDate && dueDate ? diffInDays(parseIsoDate(dueDate), parseIsoDate(endDate)) + 1 : 1;
+
+  /** Changing the start keeps a multi-day task's length (like dragging it). */
+  const changeDueDate = (next: IsoDate) => {
+    if (next && endDate && dueDate) {
+      const delta = diffInDays(parseIsoDate(dueDate), parseIsoDate(next));
+      setEndDate(toIsoDate(addDays(parseIsoDate(endDate), delta)));
+    }
+    setDueDate(next);
+    setRangeError(null);
+  };
 
   /** Validate locally, then create or update via the API. */
   const handleSubmit = async (event: FormEvent) => {
@@ -51,12 +74,23 @@ export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose 
     if (!dueDate) {
       return;
     }
+    if (endDate && endDate < dueDate) {
+      setRangeError("The end date cannot be before the start date.");
+      return;
+    }
+    if (spanDays > MAX_SPAN_DAYS) {
+      setRangeError(`A task can span at most ${MAX_SPAN_DAYS} days.`);
+      return;
+    }
+
     setSaving(true);
     const fields = {
       title: trimmedTitle,
       description: description.trim() === "" ? null : description.trim(),
       scope,
       due_date: dueDate,
+      // Same day or empty → single-day task (the backend normalises too).
+      end_date: endDate && endDate !== dueDate ? endDate : null,
       priority,
       color,
     };
@@ -124,33 +158,67 @@ export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose 
         </Field>
 
         <div className="form__row">
-          <Field label="Due date" htmlFor="task-date">
+          <Field label="Date" htmlFor="task-date">
             <input
               id="task-date"
               type="date"
               className="input"
               value={dueDate}
               required
-              onChange={(event) => setDueDate(event.target.value)}
+              onChange={(event) => changeDueDate(event.target.value)}
             />
           </Field>
-          <Field label="Priority" htmlFor="task-priority">
-            <select
-              id="task-priority"
-              className="input"
-              value={priority}
-              onChange={(event) => setPriority(Number(event.target.value) as TaskPriority)}
-            >
-              {PRIORITIES.map((value) => (
-                <option key={value} value={value}>
-                  {PRIORITY_LABELS[value]}
-                </option>
-              ))}
-            </select>
+          <Field
+            label="Until (optional)"
+            htmlFor="task-end-date"
+            error={rangeError}
+            hint={spanDays > 1 ? `Spans ${spanDays} days on the calendar.` : "Set to make a multi-day block."}
+          >
+            <div className="input-row">
+              <input
+                id="task-end-date"
+                type="date"
+                className="input"
+                value={endDate}
+                min={dueDate}
+                onChange={(event) => {
+                  setEndDate(event.target.value);
+                  setRangeError(null);
+                }}
+              />
+              {endDate ? (
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => {
+                    setEndDate("");
+                    setRangeError(null);
+                  }}
+                  title="Make it a single-day task"
+                >
+                  Clear
+                </button>
+              ) : null}
+            </div>
           </Field>
         </div>
 
-        <Field label="Color" hint="Tints the task chip on the calendar. Default uses the scope color.">
+        <Field label="Priority" htmlFor="task-priority">
+          <select
+            id="task-priority"
+            className="input input--auto"
+            value={priority}
+            onChange={(event) => setPriority(Number(event.target.value) as TaskPriority)}
+          >
+            {PRIORITIES.map((value) => (
+              <option key={value} value={value}>
+                {PRIORITY_LABELS[value]}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <Field label="Color" hint="Tints the task on the calendar. Default uses the scope color.">
           <div className="swatches">
             <button
               type="button"

@@ -4,6 +4,12 @@
  * The amount field accepts both "12.50" and "12,50" (Turkish keyboards type
  * a comma). Validation happens locally before the request so the user gets
  * instant feedback; the backend validates again.
+ *
+ * Paid vs. pending: an entry can be a settled transaction or a planned one
+ * (a bill due on the 14th, a salary expected at month end). For new entries
+ * the switch defaults to "pending" when the date is in the future and
+ * "paid" otherwise, and follows date changes until the user flips it
+ * manually.
  */
 
 import { useState, type FormEvent } from "react";
@@ -12,6 +18,7 @@ import { api, type FinanceKind, type FinanceLog, type IsoDate } from "../../api"
 import { ConfirmDeleteButton, Field, SegmentedControl } from "../../components/controls";
 import { Modal } from "../../components/Modal";
 import { useApiAction } from "../../hooks/useApi";
+import { toIsoDate, today } from "../../lib/dates";
 import { CATEGORY_SUGGESTIONS, KIND_LABELS } from "../../lib/labels";
 import { parseAmountInput } from "../../lib/money";
 import { usePreferences } from "../../state/preferences";
@@ -23,10 +30,17 @@ export interface FinanceEditorProps {
   defaultDate: IsoDate;
   /** Prefilled kind for new entries. */
   defaultKind?: FinanceKind;
+  /** Prefilled paid state for new entries; omit to infer it from the date. */
+  defaultPaid?: boolean;
   onClose: () => void;
 }
 
-export function FinanceEditor({ log, defaultDate, defaultKind = "expense", onClose }: FinanceEditorProps) {
+/** Future-dated entries are usually plans, past/today ones already happened. */
+function inferPaid(date: IsoDate): boolean {
+  return date <= toIsoDate(today());
+}
+
+export function FinanceEditor({ log, defaultDate, defaultKind = "expense", defaultPaid, onClose }: FinanceEditorProps) {
   const run = useApiAction();
   const { preferences } = usePreferences();
   const isEdit = log !== undefined;
@@ -37,8 +51,14 @@ export function FinanceEditor({ log, defaultDate, defaultKind = "expense", onClo
   const [category, setCategory] = useState(log?.category ?? "");
   const [description, setDescription] = useState(log?.description ?? "");
   const [occurredOn, setOccurredOn] = useState<IsoDate>(log?.occurred_on ?? defaultDate);
+  const [isPaid, setIsPaid] = useState<boolean>(log?.is_paid ?? defaultPaid ?? inferPaid(defaultDate));
+  /** Once the user picks paid/pending explicitly, date changes stop overriding it. */
+  const [paidTouched, setPaidTouched] = useState(isEdit || defaultPaid !== undefined);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<{ amount?: string; category?: string; currency?: string }>({});
+
+  const paidLabel = kind === "income" ? "Received" : "Paid";
+  const pendingLabel = kind === "income" ? "Expected" : "Pending";
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
@@ -68,8 +88,9 @@ export function FinanceEditor({ log, defaultDate, defaultKind = "expense", onClo
       category: trimmedCategory,
       description: description.trim() === "" ? null : description.trim(),
       occurred_on: occurredOn,
+      is_paid: isPaid,
     };
-    const label = KIND_LABELS[kind];
+    const label = isPaid ? KIND_LABELS[kind] : `Planned ${KIND_LABELS[kind].toLowerCase()}`;
     const result = isEdit
       ? await run(() => api.finance.update(log.id, fields), { success: `${label} saved` })
       : await run(() => api.finance.create(fields), { success: `${label} recorded` });
@@ -92,10 +113,11 @@ export function FinanceEditor({ log, defaultDate, defaultKind = "expense", onClo
   };
 
   const listId = `category-suggestions-${kind}`;
+  const titleNoun = KIND_LABELS[kind].toLowerCase();
 
   return (
     <Modal
-      title={isEdit ? `Edit ${KIND_LABELS[kind].toLowerCase()}` : `New ${KIND_LABELS[kind].toLowerCase()}`}
+      title={isEdit ? `Edit ${titleNoun}` : isPaid ? `New ${titleNoun}` : `Plan ${titleNoun}`}
       onClose={onClose}
       footer={
         <>
@@ -111,17 +133,36 @@ export function FinanceEditor({ log, defaultDate, defaultKind = "expense", onClo
       }
     >
       <form id="finance-editor-form" className="form" onSubmit={handleSubmit}>
-        <Field label="Type">
-          <SegmentedControl
-            label="Type"
-            value={kind}
-            onChange={setKind}
-            options={[
-              { value: "expense", label: "Expense" },
-              { value: "income", label: "Income" },
-            ]}
-          />
-        </Field>
+        <div className="form__row">
+          <Field label="Type">
+            <SegmentedControl
+              label="Type"
+              value={kind}
+              onChange={setKind}
+              options={[
+                { value: "expense", label: "Expense" },
+                { value: "income", label: "Income" },
+              ]}
+            />
+          </Field>
+          <Field
+            label="Status"
+            hint={isPaid ? "Already settled." : "Planned: counts toward the month, shown as pending."}
+          >
+            <SegmentedControl
+              label="Status"
+              value={isPaid ? "paid" : "pending"}
+              onChange={(value) => {
+                setIsPaid(value === "paid");
+                setPaidTouched(true);
+              }}
+              options={[
+                { value: "paid", label: paidLabel },
+                { value: "pending", label: pendingLabel },
+              ]}
+            />
+          </Field>
+        </div>
 
         <div className="form__row">
           <Field label="Amount" htmlFor="finance-amount" error={errors.amount}>
@@ -153,7 +194,7 @@ export function FinanceEditor({ log, defaultDate, defaultKind = "expense", onClo
               className="input"
               list={listId}
               maxLength={60}
-              placeholder="e.g. Groceries"
+              placeholder="e.g. Credit card"
               value={category}
               onChange={(event) => setCategory(event.target.value)}
             />
@@ -163,14 +204,20 @@ export function FinanceEditor({ log, defaultDate, defaultKind = "expense", onClo
               ))}
             </datalist>
           </Field>
-          <Field label="Date" htmlFor="finance-date">
+          <Field label={isPaid ? "Date" : "Due date"} htmlFor="finance-date">
             <input
               id="finance-date"
               type="date"
               className="input"
               required
               value={occurredOn}
-              onChange={(event) => setOccurredOn(event.target.value)}
+              onChange={(event) => {
+                const next = event.target.value;
+                setOccurredOn(next);
+                if (!paidTouched && next) {
+                  setIsPaid(inferPaid(next));
+                }
+              }}
             />
           </Field>
         </div>
