@@ -1,0 +1,13 @@
+# Core-Track backend dependencies (verified on Python 3.14, macOS).
+# Install with:  pip install -r requirements.txt
+
+# --- Runtime ----------------------------------------------------------------
+fastapi==0.142.4            # Web framework (includes Starlette + CORSMiddleware)
+uvicorn[standard]==0.54.0   # ASGI server with auto-reload and fast event loop
+SQLAlchemy==2.1.4           # ORM / SQLite access
+pydantic==2.13.5            # Request/response validation
+pydantic-settings==2.15.0   # Typed settings from env vars and .env
+
+# --- Development / testing --------------------------------------------------
+pytest==9.1.1
+httpx2==2.13.1              # HTTP client used by fastapi.testclient.TestClient

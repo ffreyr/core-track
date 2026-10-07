@@ -1,0 +1,10 @@
+# Keep the graph focused on source code (gitignore syntax).
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/node_modules/
+backend/data/
+graphify-out/
+**/dist/
+**/src-tauri/target/
+**/src-tauri/gen/

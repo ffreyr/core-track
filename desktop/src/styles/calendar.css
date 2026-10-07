@@ -1,0 +1,453 @@
+/*
+ * Calendar grid, cells, chips, day panel and the view-options popover.
+ *
+ * The grid is driven by two custom properties set from the layout engine:
+ *   --cols  number of columns (1–7)
+ *   --rows  number of week rows
+ * Rows share the available height equally but never shrink below the
+ * density's minimum height; past that, the cell area scrolls.
+ */
+
+.calendar-view {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.calendar-view > .notice {
+  margin: 10px 18px 0;
+}
+
+.calendar-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---- Grid -------------------------------------------------------------- */
+
+.calendar-grid {
+  /* --row-min and --chip-height are set inline from DENSITY_METRICS (CalendarGrid.tsx). */
+  --chip-font: 12px;
+
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  transition: opacity 0.15s;
+}
+
+.calendar-grid.density-compact {
+  --chip-font: 11px;
+}
+
+.calendar-grid.is-loading {
+  opacity: 0.55;
+}
+
+.calendar-grid__weekdays {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.calendar-grid__weekday {
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.calendar-grid__cells {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(var(--cols), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--rows), minmax(var(--row-min), 1fr));
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--border);
+  gap: 1px;
+}
+
+/* ---- Cell -------------------------------------------------------------- */
+
+.calendar-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  min-height: 0;
+  padding: 6px 6px 8px;
+  background: var(--surface);
+  cursor: default;
+  transition: background 0.1s, box-shadow 0.1s;
+}
+
+.calendar-cell:hover {
+  background: var(--surface-hover);
+}
+
+.calendar-cell.is-outside {
+  background: var(--surface-2);
+}
+
+.calendar-cell.is-outside .calendar-cell__number {
+  color: var(--text-faint);
+}
+
+.calendar-cell.is-selected {
+  background: var(--selected);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.calendar-cell.is-drop-target {
+  background: var(--drop-target);
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+}
+
+.calendar-cell__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  min-height: 22px;
+}
+
+.calendar-cell__date {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+}
+
+.calendar-cell__number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-cell.is-today .calendar-cell__number {
+  background: var(--today);
+  color: var(--accent-text);
+}
+
+.calendar-cell__weekday,
+.calendar-cell__month {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.calendar-cell__net {
+  overflow: hidden;
+  padding: 1px 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.calendar-cell__net.is-positive {
+  background: var(--positive-soft);
+}
+
+.calendar-cell__net.is-negative {
+  background: var(--negative-soft);
+}
+
+.calendar-cell__items {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.calendar-cell__more {
+  align-self: flex-start;
+  flex-shrink: 0;
+  height: 18px; /* MORE_ROW in CalendarGrid.tsx */
+  padding: 0 6px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.calendar-cell__more:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* ---- Chips ------------------------------------------------------------- */
+
+.chip {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: var(--chip-height);
+  padding: 0 5px;
+  border: none;
+  border-radius: 5px;
+  font-size: var(--chip-font);
+  text-align: left;
+  cursor: grab;
+}
+
+.chip:active {
+  cursor: grabbing;
+}
+
+.chip--task {
+  /* Accent strip on the left + a faint tint of the same color. */
+  border-left: 3px solid var(--chip-accent);
+  background: color-mix(in srgb, var(--chip-accent) 12%, var(--surface));
+}
+
+.chip--task.is-high-priority .chip__label {
+  font-weight: 700;
+}
+
+.chip--task.is-done {
+  opacity: 0.55;
+}
+
+.chip--task.is-done .chip__label {
+  text-decoration: line-through;
+}
+
+.chip__check {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  margin: 0;
+  cursor: pointer;
+}
+
+.chip__label {
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.chip--task .scope-badge {
+  min-width: 14px;
+  height: 14px;
+  font-size: 9px;
+}
+
+.chip--finance {
+  justify-content: space-between;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip--income {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+
+.chip--expense {
+  background: var(--negative-soft);
+  color: var(--negative);
+}
+
+.chip__amount {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.chip__category {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Day panel --------------------------------------------------------- */
+
+.day-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 320px;
+  flex-shrink: 0;
+  padding: 16px;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  animation: panel-in 0.16s ease-out;
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+.day-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.day-panel__header h2 {
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.day-panel__summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.day-panel__summary > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.day-panel__summary strong {
+  overflow: hidden;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.day-panel__section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.day-panel__section h3 {
+  font-size: 13px;
+}
+
+.day-panel__hint {
+  margin: auto 0 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+/* ---- View options popover ---------------------------------------------- */
+
+.settings-popover {
+  position: absolute;
+  top: 60px;
+  right: 18px;
+  z-index: 20;
+  width: 560px;
+  max-width: calc(100% - 36px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: modal-in 0.14s ease-out;
+}
+
+.settings-popover__header,
+.settings-popover__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+}
+
+.settings-popover__header {
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-popover__header h2 {
+  font-size: 14px;
+}
+
+.settings-popover__footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+}
+
+.settings-popover__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  padding: 14px;
+}
+
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-group h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.settings-row--stacked {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.scope-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.scope-filter__item {
+  height: 24px;
+  padding: 0 10px;
+  border: 1.5px solid;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}

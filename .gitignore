@@ -1,0 +1,22 @@
+# --- Python -----------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- Local configuration & data ---------------------------------------------
+# Real environment overrides and the SQLite database never belong in git.
+backend/.env
+backend/data/*.db
+backend/data/*.db-wal
+backend/data/*.db-shm
+
+# --- macOS ------------------------------------------------------------------
+.DS_Store
+
+# --- graphify -----------------------------------------------------------
+# Generated knowledge graph; rebuild locally with `graphify update .`
+graphify-out/
+.claude/settings.json.graphify-bak

@@ -1,0 +1,3 @@
+# Graph artifacts change on every rebuild; keep them out of Claude's context cache.
+graph.json
+graphify-out/
