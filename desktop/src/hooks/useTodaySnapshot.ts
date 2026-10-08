@@ -25,6 +25,8 @@ export interface TodaySnapshot {
   /** Today's tasks, sorted for display; `undefined` before the first load. */
   tasks: Task[] | undefined;
   doneCount: number;
+  /** Today's tasks currently in progress. */
+  inProgressCount: number;
   /** This month's summary; `undefined` before the first load. */
   summary: FinanceSummary | undefined;
   /** Earliest unpaid expense due today or later this month. */
@@ -36,11 +38,14 @@ export interface TodaySnapshot {
   reload: () => void;
 }
 
-/** Open tasks first, then highest priority, then alphabetical. */
+/** Workflow rank for display: in progress first, then to do, then done. */
+const STATUS_RANK = { in_progress: 0, todo: 1, done: 2 } as const;
+
+/** In-progress tasks first, then open ones, then done; each by priority, then title. */
 function sortForGlance(tasks: Task[]): Task[] {
   return [...tasks].sort(
     (a, b) =>
-      Number(a.is_completed) - Number(b.is_completed) || b.priority - a.priority || a.title.localeCompare(b.title),
+      STATUS_RANK[a.status] - STATUS_RANK[b.status] || b.priority - a.priority || a.title.localeCompare(b.title),
   );
 }
 
@@ -76,6 +81,7 @@ export function useTodaySnapshot(): TodaySnapshot {
     todayIso,
     tasks,
     doneCount: tasks?.filter((task) => task.is_completed).length ?? 0,
+    inProgressCount: tasks?.filter((task) => task.status === "in_progress").length ?? 0,
     summary,
     nextDue: pendingExpenses.find((entry) => entry.occurred_on >= todayIso) ?? null,
     overdueCount: pendingExpenses.filter((entry) => entry.occurred_on < todayIso).length,

@@ -244,6 +244,13 @@
   border-bottom-right-radius: 0;
 }
 
+/* In progress: diagonal "work in progress" stripes over the bar color. */
+.task-bar.is-in-progress {
+  background:
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.16) 0 6px, transparent 6px 12px),
+    var(--chip-accent);
+}
+
 .task-bar.is-done {
   opacity: 0.5;
 }
@@ -350,6 +357,15 @@
 
 .chip--task:hover {
   background: color-mix(in srgb, var(--chip-accent) 22%, var(--surface));
+}
+
+/* In progress: stronger tint and bolder title. */
+.chip--task.is-in-progress {
+  background: color-mix(in srgb, var(--chip-accent) 26%, var(--surface));
+}
+
+.chip--task.is-in-progress .chip__label {
+  font-weight: 600;
 }
 
 .chip--task.is-high-priority .chip__label {

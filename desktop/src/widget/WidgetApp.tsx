@@ -30,7 +30,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { api, type Task } from "../api";
-import { ProgressRing, RoundCheck } from "../components/glance";
+import { ProgressRing, RoundCheck, StatusAction } from "../components/glance";
 import { Icon } from "../components/Icon";
 import { useApiAction } from "../hooks/useApi";
 import { useTodaySnapshot } from "../hooks/useTodaySnapshot";
@@ -127,6 +127,7 @@ export function WidgetApp() {
                 <li key={task.id} className={task.is_completed ? "widget__task is-done" : "widget__task"}>
                   <RoundCheck
                     checked={task.is_completed}
+                    inProgress={task.status === "in_progress"}
                     color={color}
                     label={task.is_completed ? `Reopen ${task.title}` : `Complete ${task.title}`}
                     onToggle={() => void run(() => api.tasks.toggle(task.id))}
@@ -140,6 +141,11 @@ export function WidgetApp() {
                     </span>
                   ) : null}
                   {progress ? <span className="widget__span">{progress}</span> : null}
+                  <StatusAction
+                    status={task.status}
+                    title={task.title}
+                    onChange={(next) => void run(() => api.tasks.setStatus(task.id, next))}
+                  />
                 </li>
               );
             })}

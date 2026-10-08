@@ -121,6 +121,19 @@ class TaskScope(enum.StrEnum):
     YEARLY = "yearly"
 
 
+class TaskStatus(enum.StrEnum):
+    """Workflow state of a task.
+
+    ``status`` is the source of truth; the older ``is_completed`` flag is
+    kept in sync by :mod:`app.crud` (``True`` exactly when ``status`` is
+    ``done``) so existing filters and clients keep working.
+    """
+
+    TODO = "todo"
+    IN_PROGRESS = "in_progress"
+    DONE = "done"
+
+
 class FinanceKind(enum.StrEnum):
     """Direction of a financial log: money coming in or going out."""
 
@@ -150,8 +163,10 @@ class TaskItem(Base):
           application code rather than a CHECK constraint so databases
           upgraded by ``ALTER TABLE`` (which cannot add constraints in SQLite)
           and freshly created databases behave identically.
-        * ``completed_at`` is set when the task is marked complete and cleared
-          when it is reopened; it is never set by clients directly.
+        * ``status`` is ``todo``, ``in_progress`` or ``done``. ``is_completed``
+          mirrors ``status == done`` and ``completed_at`` is stamped when the
+          task reaches ``done`` and cleared when it leaves it; both are
+          maintained by :mod:`app.crud`, never set independently.
         * ``priority`` ranges from 0 (none) to 3 (high).
         * ``color`` is an optional ``#RRGGBB`` hint for calendar chips.
         * ``updated_at`` is bumped on every change and indexed so the mobile
@@ -181,6 +196,22 @@ class TaskItem(Base):
     )
     due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    # server_default mirrors the v3 migration's "DEFAULT 'todo'" so fresh and
+    # upgraded databases have identical column definitions.
+    status: Mapped[TaskStatus] = mapped_column(
+        Enum(
+            TaskStatus,
+            native_enum=False,
+            length=16,
+            values_callable=_enum_values,
+            validate_strings=True,
+            name="task_status",
+        ),
+        nullable=False,
+        default=TaskStatus.TODO,
+        server_default=text("'todo'"),
+        index=True,
+    )
     is_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

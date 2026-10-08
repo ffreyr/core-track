@@ -22,6 +22,7 @@ from app.models import (
     FinancialLog,
     TaskItem,
     TaskScope,
+    TaskStatus,
     cents_to_decimal,
     utcnow,
 )
@@ -39,18 +40,31 @@ class TaskDateRangeError(ValueError):
 # ===========================================================================
 
 
-def _apply_completion(task: TaskItem, is_completed: bool) -> None:
-    """Set a task's completion flag and keep ``completed_at`` consistent.
+def _apply_status(task: TaskItem, status: TaskStatus) -> None:
+    """Move a task to ``status`` and keep the derived fields consistent.
 
-    * Completing an open task stamps ``completed_at`` with the current time.
-    * Reopening a completed task clears ``completed_at``.
-    * Re-sending the current state is a no-op, so the original completion
-      time is preserved if a client PATCHes ``is_completed=true`` twice.
+    * ``is_completed`` always equals ``status == done``.
+    * Reaching ``done`` stamps ``completed_at``; leaving ``done`` clears it.
+    * Re-sending the current status is a no-op, so the original completion
+      time is preserved if a client sends ``done`` twice.
     """
-    if is_completed == task.is_completed:
+    if status == task.status:
         return
-    task.is_completed = is_completed
-    task.completed_at = utcnow() if is_completed else None
+    task.status = status
+    task.is_completed = status == TaskStatus.DONE
+    task.completed_at = utcnow() if status == TaskStatus.DONE else None
+
+
+def _apply_completion(task: TaskItem, is_completed: bool) -> None:
+    """Legacy boolean API mapped onto the status workflow.
+
+    ``True`` → ``done``. ``False`` reopens a *done* task to ``todo`` but
+    leaves an ``in_progress`` task untouched (it is already not completed).
+    """
+    if is_completed:
+        _apply_status(task, TaskStatus.DONE)
+    elif task.status == TaskStatus.DONE:
+        _apply_status(task, TaskStatus.TODO)
 
 
 def _normalize_task_range(due_date: date, end_date: date | None) -> date | None:
@@ -81,6 +95,7 @@ def list_tasks(
     start: date | None = None,
     end: date | None = None,
     completed: bool | None = None,
+    status: TaskStatus | None = None,
 ) -> Sequence[TaskItem]:
     """Return tasks matching the optional filters.
 
@@ -96,6 +111,7 @@ def list_tasks(
         start: Only tasks that end on or after this date.
         end: Only tasks that start on or before this date.
         completed: ``True`` for done tasks, ``False`` for open tasks.
+        status: Only tasks in this workflow status.
 
     Returns:
         Tasks ordered by start date, then priority (high first), then id.
@@ -110,6 +126,8 @@ def list_tasks(
         stmt = stmt.where(TaskItem.due_date <= end)
     if completed is not None:
         stmt = stmt.where(TaskItem.is_completed == completed)
+    if status is not None:
+        stmt = stmt.where(TaskItem.status == status)
     stmt = stmt.order_by(TaskItem.due_date, TaskItem.priority.desc(), TaskItem.id)
     return db.scalars(stmt).all()
 
@@ -120,7 +138,7 @@ def get_task(db: Session, task_id: int) -> TaskItem | None:
 
 
 def create_task(db: Session, payload: schemas.TaskCreate) -> TaskItem:
-    """Insert a new (open) task and return it with generated fields populated.
+    """Insert a new task (``todo`` unless a status is given) and return it.
 
     Raises:
         TaskDateRangeError: If the date range is invalid (normally already
@@ -128,7 +146,9 @@ def create_task(db: Session, payload: schemas.TaskCreate) -> TaskItem:
     """
     data = payload.model_dump()
     data["end_date"] = _normalize_task_range(data["due_date"], data["end_date"])
-    task = TaskItem(**data)
+    status = data.pop("status")
+    task = TaskItem(**data, status=TaskStatus.TODO, is_completed=False)
+    _apply_status(task, status)
     db.add(task)
     db.commit()
     db.refresh(task)
@@ -149,14 +169,16 @@ def update_task(db: Session, task: TaskItem, payload: schemas.TaskUpdate) -> Tas
     The resulting range is validated *before* anything is modified, so a
     rejected update leaves the task untouched.
 
-    ``is_completed`` is routed through :func:`_apply_completion` so
-    ``completed_at`` stays correct.
+    Status: ``status`` is applied through :func:`_apply_status`; the legacy
+    ``is_completed`` flag is honoured only when ``status`` is not sent.
+    Either way ``is_completed`` and ``completed_at`` stay consistent.
 
     Raises:
         TaskDateRangeError: If the resulting date range is invalid.
     """
     changes = payload.model_dump(exclude_unset=True)
     is_completed = changes.pop("is_completed", None)
+    status = changes.pop("status", None)
 
     new_due = changes.get("due_date", task.due_date)
     if "end_date" in changes:
@@ -170,7 +192,9 @@ def update_task(db: Session, task: TaskItem, payload: schemas.TaskUpdate) -> Tas
 
     for field_name, value in changes.items():
         setattr(task, field_name, value)
-    if is_completed is not None:
+    if status is not None:
+        _apply_status(task, status)
+    elif is_completed is not None:
         _apply_completion(task, is_completed)
 
     db.commit()
@@ -179,8 +203,8 @@ def update_task(db: Session, task: TaskItem, payload: schemas.TaskUpdate) -> Tas
 
 
 def toggle_task(db: Session, task: TaskItem) -> TaskItem:
-    """Flip a task between open and completed (the calendar checkbox action)."""
-    _apply_completion(task, not task.is_completed)
+    """The checkbox action: ``done`` → ``todo``; ``todo``/``in_progress`` → ``done``."""
+    _apply_status(task, TaskStatus.TODO if task.status == TaskStatus.DONE else TaskStatus.DONE)
     db.commit()
     db.refresh(task)
     return task

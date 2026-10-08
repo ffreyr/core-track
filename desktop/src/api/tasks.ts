@@ -3,7 +3,7 @@
  */
 
 import { request } from "./http";
-import type { Task, TaskCreate, TaskListParams, TaskUpdate } from "./types";
+import type { Task, TaskCreate, TaskListParams, TaskStatus, TaskUpdate } from "./types";
 
 export const tasksApi = {
   /** List tasks, optionally filtered by scope, due-date range and status. */
@@ -30,7 +30,12 @@ export const tasksApi = {
     return request<Task>("PATCH", `/tasks/${id}`, { body: patch });
   },
 
-  /** Flip a task between open and completed (the calendar checkbox). */
+  /** Move a task to a workflow status (`todo` / `in_progress` / `done`). */
+  setStatus(id: number, status: TaskStatus): Promise<Task> {
+    return request<Task>("PATCH", `/tasks/${id}`, { body: { status } });
+  },
+
+  /** Checkbox action: `done` → `todo`, otherwise → `done`. */
   toggle(id: number): Promise<Task> {
     return request<Task>("POST", `/tasks/${id}/toggle`);
   },

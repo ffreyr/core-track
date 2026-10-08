@@ -88,6 +88,16 @@
   transform: scale(1);
 }
 
+/* In progress: the ring is half filled (left half), Things-style. */
+.round-check.is-in-progress::before {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  background: conic-gradient(var(--check-color) 0 180deg, transparent 180deg 360deg);
+  transform: scaleX(-1);
+}
+
 .round-check:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -123,4 +133,86 @@
 .health-pill--over {
   background: var(--negative-soft);
   color: var(--negative);
+}
+
+/* ---- StatusAction (start / in-progress pill) ---- */
+
+.status-start {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0 0 0 1px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--accent);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s;
+}
+
+/* Revealed while the row containing it is hovered or focused. */
+*:hover > .status-start,
+.status-start:focus-visible {
+  opacity: 1;
+}
+
+.status-start:hover {
+  background: var(--accent-soft);
+}
+
+.status-start svg {
+  fill: currentColor;
+}
+
+.status-pill {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px 0 8px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.status-pill__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: status-pulse 1.8s ease-in-out infinite;
+}
+
+/* Hovering the pill swaps the pulsing dot for a pause icon. */
+.status-pill__pause {
+  display: none;
+}
+
+.status-pill:hover .status-pill__dot {
+  display: none;
+}
+
+.status-pill:hover .status-pill__pause {
+  display: inline-flex;
+}
+
+@keyframes status-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-pill__dot {
+    animation: none;
+  }
 }

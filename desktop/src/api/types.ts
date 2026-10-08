@@ -26,6 +26,15 @@ export type TaskScope = "daily" | "weekly" | "monthly" | "yearly";
 /** All scopes in their natural display order. */
 export const TASK_SCOPES: readonly TaskScope[] = ["daily", "weekly", "monthly", "yearly"];
 
+/**
+ * Workflow state of a task. `status` is the source of truth; `is_completed`
+ * is kept equal to `status === "done"` by the server.
+ */
+export type TaskStatus = "todo" | "in_progress" | "done";
+
+/** All statuses in workflow order. */
+export const TASK_STATUSES: readonly TaskStatus[] = ["todo", "in_progress", "done"];
+
 /** Task priority: 0 = none, 1 = low, 2 = medium, 3 = high. */
 export type TaskPriority = 0 | 1 | 2 | 3;
 
@@ -45,6 +54,7 @@ export interface Task {
   span_days: number;
   priority: TaskPriority;
   color: string | null;
+  status: TaskStatus;
   is_completed: boolean;
   completed_at: IsoDateTime | null;
   created_at: IsoDateTime;
@@ -61,6 +71,8 @@ export type TaskCreate = {
   end_date?: IsoDate | null;
   priority?: TaskPriority;
   color?: string | null;
+  /** Defaults to `"todo"` on the server. */
+  status?: TaskStatus;
 };
 
 /**
@@ -77,6 +89,7 @@ export type TaskListParams = {
   start?: IsoDate;
   end?: IsoDate;
   completed?: boolean;
+  status?: TaskStatus;
 };
 
 // ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@ from typing import Annotated, ClassVar, Self
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 
-from app.models import MAX_TASK_SPAN_DAYS, FinanceKind, TaskScope
+from app.models import MAX_TASK_SPAN_DAYS, FinanceKind, TaskScope, TaskStatus
 
 # ---------------------------------------------------------------------------
 # Reusable field types
@@ -99,6 +99,7 @@ class TaskCreate(_InputModel):
     end_date: date | None = None
     priority: Priority = 1
     color: HexColor | None = None
+    status: TaskStatus = TaskStatus.TODO
 
     @model_validator(mode="after")
     def _validate_date_range(self) -> Self:
@@ -129,12 +130,13 @@ class TaskUpdate(_PatchModel):
     The resulting range is validated in :func:`app.crud.update_task` because
     it depends on the task's current values.
 
-    ``is_completed`` may be set here as well as via the dedicated toggle
-    endpoint; either way the server maintains ``completed_at``.
+    Status: send ``status`` (``todo`` / ``in_progress`` / ``done``). The
+    legacy ``is_completed`` boolean is still accepted and is ignored when
+    ``status`` is sent too. The server maintains ``completed_at``.
     """
 
     NON_NULLABLE: ClassVar[frozenset[str]] = frozenset(
-        {"title", "scope", "due_date", "priority", "is_completed"}
+        {"title", "scope", "due_date", "priority", "is_completed", "status"}
     )
 
     title: TaskTitle | None = None
@@ -145,6 +147,7 @@ class TaskUpdate(_PatchModel):
     priority: Priority | None = None
     color: HexColor | None = None
     is_completed: bool | None = None
+    status: TaskStatus | None = None
 
 
 class TaskRead(BaseModel):
@@ -166,6 +169,7 @@ class TaskRead(BaseModel):
     span_days: int
     priority: int
     color: str | None
+    status: TaskStatus
     is_completed: bool
     completed_at: datetime | None
     created_at: datetime

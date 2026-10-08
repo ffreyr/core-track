@@ -57,6 +57,23 @@ function beginDrag(
   onDragStart(item);
 }
 
+/**
+ * Ref callback reflecting "in progress" as the checkbox's native
+ * indeterminate state (a dash), which has no HTML attribute equivalent.
+ */
+function inProgressRef(task: Task) {
+  return (element: HTMLInputElement | null) => {
+    if (element) {
+      element.indeterminate = task.status === "in_progress";
+    }
+  };
+}
+
+/** Tooltip suffix describing the task's status. */
+function statusNote(task: Task): string {
+  return task.status === "in_progress" ? " · In progress" : task.status === "done" ? " · Done" : "";
+}
+
 /** Accent color of a task: its own color, else its scope color. */
 function taskAccent(task: Task): string {
   return task.color ?? SCOPE_META[task.scope].color;
@@ -120,6 +137,7 @@ export function TaskChip({
     "chip",
     "chip--task",
     task.is_completed ? "is-done" : "",
+    task.status === "in_progress" ? "is-in-progress" : "",
     task.priority === 3 ? "is-high-priority" : "",
   ]
     .filter(Boolean)
@@ -142,9 +160,10 @@ export function TaskChip({
       onDragEnd={onDragEnd}
       onClick={stop}
       onDoubleClick={stop}
-      title={task.description ? `${task.title}\n\n${task.description}` : task.title}
+      title={`${task.title}${statusNote(task)}${task.description ? `\n\n${task.description}` : ""}`}
     >
       <input
+        ref={inProgressRef(task)}
         type="checkbox"
         className="chip__check"
         checked={task.is_completed}
@@ -202,6 +221,7 @@ export function TaskBar({
   const className = [
     "task-bar",
     task.is_completed ? "is-done" : "",
+    task.status === "in_progress" ? "is-in-progress" : "",
     continuesBefore ? "continues-before" : "",
     continuesAfter ? "continues-after" : "",
   ]
@@ -235,10 +255,11 @@ export function TaskBar({
       onDragEnd={onDragEnd}
       onClick={stop}
       onDoubleClick={stop}
-      title={`${task.title} (${task.span_days} days: ${range})${task.description ? `\n\n${task.description}` : ""}`}
+      title={`${task.title} (${task.span_days} days: ${range})${statusNote(task)}${task.description ? `\n\n${task.description}` : ""}`}
     >
       {continuesBefore ? <span className="task-bar__arrow" aria-hidden="true">‹</span> : null}
       <input
+        ref={inProgressRef(task)}
         type="checkbox"
         className="chip__check"
         checked={task.is_completed}

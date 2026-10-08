@@ -1,8 +1,12 @@
 /**
- * Small visual primitives for glanceable UI (sidebar Today card, widget).
+ * Small visual primitives for glanceable UI (sidebar Today card, widget,
+ * task lists): progress ring, round checkbox and task status action.
  */
 
 import type { CSSProperties } from "react";
+
+import type { TaskStatus } from "../api";
+import { Icon } from "./Icon";
 
 // ---------------------------------------------------------------------------
 // ProgressRing
@@ -73,21 +77,26 @@ interface RoundCheckProps {
   /** Ring/fill color (task color or scope color). */
   color: string;
   label: string;
+  /** Show the half-filled "in progress" state (ignored when checked). */
+  inProgress?: boolean;
 }
 
 /**
  * Circular checkbox in the style of Apple Reminders: a colored ring that
- * fills with the same color and shows a white check when completed.
+ * fills with the same color and shows a white check when completed. An
+ * in-progress task shows a half-filled ring (and reports `aria-checked`
+ * "mixed"). Clicking always toggles completion.
  * Implemented as a `role="checkbox"` button so it is keyboard accessible.
  */
-export function RoundCheck({ checked, onToggle, color, label }: RoundCheckProps) {
+export function RoundCheck({ checked, onToggle, color, label, inProgress = false }: RoundCheckProps) {
+  const half = inProgress && !checked;
   return (
     <button
       type="button"
       role="checkbox"
-      aria-checked={checked}
+      aria-checked={checked ? true : half ? "mixed" : false}
       aria-label={label}
-      className={checked ? "round-check is-checked" : "round-check"}
+      className={checked ? "round-check is-checked" : half ? "round-check is-in-progress" : "round-check"}
       style={{ "--check-color": color } as CSSProperties}
       onClick={(event) => {
         event.stopPropagation();
@@ -97,6 +106,64 @@ export function RoundCheck({ checked, onToggle, color, label }: RoundCheckProps)
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M6 12.5l4 4L18 8.5" fill="none" stroke="currentColor" strokeWidth={3.2} strokeLinecap="round" strokeLinejoin="round" />
       </svg>
+    </button>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// StatusAction
+// ---------------------------------------------------------------------------
+
+interface StatusActionProps {
+  status: TaskStatus;
+  /** Request a new status (`in_progress` to start, `todo` to pause). */
+  onChange: (status: TaskStatus) => void;
+  title: string;
+}
+
+/**
+ * Quick start/pause control for a task row.
+ *
+ * - `todo`        → a ▶ "Start" button, revealed when the row is hovered.
+ * - `in_progress` → an always-visible "In progress" pill; clicking it pauses
+ *                   the task back to `todo`.
+ * - `done`        → nothing (the checkbox handles reopening).
+ */
+export function StatusAction({ status, onChange, title }: StatusActionProps) {
+  if (status === "done") {
+    return null;
+  }
+  if (status === "in_progress") {
+    return (
+      <button
+        type="button"
+        className="status-pill"
+        onClick={(event) => {
+          event.stopPropagation();
+          onChange("todo");
+        }}
+        title={`"${title}" is in progress — click to pause`}
+      >
+        <span className="status-pill__dot" aria-hidden="true" />
+        <span className="status-pill__text">In progress</span>
+        <span className="status-pill__pause" aria-hidden="true">
+          <Icon name="pause" size={10} />
+        </span>
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="status-start"
+      onClick={(event) => {
+        event.stopPropagation();
+        onChange("in_progress");
+      }}
+      title={`Start "${title}" (mark in progress)`}
+      aria-label={`Start ${title}`}
+    >
+      <Icon name="play" size={10} />
     </button>
   );
 }

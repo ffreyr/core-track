@@ -14,7 +14,7 @@
 
 import { api, TASK_SCOPES, type Task, type TaskScope } from "../../api";
 import { ErrorNotice } from "../../components/controls";
-import { RoundCheck } from "../../components/glance";
+import { RoundCheck, StatusAction } from "../../components/glance";
 import { Icon } from "../../components/Icon";
 import { useApiAction, useApiQuery } from "../../hooks/useApi";
 import {
@@ -145,6 +145,7 @@ export function TasksBoard({ anchor, onAnchorChange }: TasksBoardProps) {
                     <li key={task.id} className={task.is_completed ? "item-row is-done" : "item-row"}>
                       <RoundCheck
                         checked={task.is_completed}
+                        inProgress={task.status === "in_progress"}
                         color={task.color ?? SCOPE_META[task.scope].color}
                         label={task.is_completed ? `Reopen ${task.title}` : `Complete ${task.title}`}
                         onToggle={() => void run(() => api.tasks.toggle(task.id))}
@@ -159,6 +160,11 @@ export function TasksBoard({ anchor, onAnchorChange }: TasksBoardProps) {
                           {task.priority > 0 ? ` · ${PRIORITY_LABELS[task.priority]}` : ""}
                         </span>
                       </button>
+                      <StatusAction
+                        status={task.status}
+                        title={task.title}
+                        onChange={(next) => void run(() => api.tasks.setStatus(task.id, next))}
+                      />
                     </li>
                   ))}
                 </ul>

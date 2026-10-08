@@ -95,9 +95,22 @@ def _v2_multi_day_tasks_and_pending_payments(conn: Connection) -> None:
     _add_column_if_missing(conn, "financial_logs", "is_paid", "BOOLEAN NOT NULL DEFAULT 1")
 
 
+def _v3_task_status(conn: Connection) -> None:
+    """Task workflow status (``todo`` / ``in_progress`` / ``done``).
+
+    * ``tasks.status`` – defaults to ``todo``.
+    * Tasks already marked completed are backfilled to ``done`` (only rows
+      still at the default, so re-running never overrides a real status).
+    """
+    _add_column_if_missing(conn, "tasks", "status", "VARCHAR(16) NOT NULL DEFAULT 'todo'")
+    conn.exec_driver_sql("UPDATE tasks SET status = 'done' WHERE is_completed = 1 AND status = 'todo'")
+    conn.exec_driver_sql('CREATE INDEX IF NOT EXISTS "ix_tasks_status" ON "tasks" ("status")')
+
+
 #: Ordered list of all migrations. Append new steps; never edit applied ones.
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(2, "add tasks.end_date and financial_logs.is_paid", _v2_multi_day_tasks_and_pending_payments),
+    Migration(3, "add tasks.status (todo / in_progress / done)", _v3_task_status),
 )
 
 #: Schema version produced by the current models.

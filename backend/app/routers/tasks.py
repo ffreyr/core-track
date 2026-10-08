@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app import crud, schemas
 from app.database import get_db
-from app.models import TaskItem, TaskScope
+from app.models import TaskItem, TaskScope, TaskStatus
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -42,13 +42,18 @@ def list_tasks(
         date | None, Query(description="Tasks overlapping on or before this day (YYYY-MM-DD)")
     ] = None,
     completed: Annotated[bool | None, Query(description="true = done, false = open")] = None,
+    # Named task_status in Python (alias "status" in the URL) so it does not
+    # shadow FastAPI's `status` module used elsewhere in this file.
+    task_status: Annotated[
+        TaskStatus | None, Query(alias="status", description="todo, in_progress or done")
+    ] = None,
 ) -> list[TaskItem]:
     """Return tasks, optionally filtered by scope, date range and status.
 
     The date range uses overlap semantics: a multi-day task is included when
     any of its days fall inside ``[start, end]``.
     """
-    return list(crud.list_tasks(db, scope=scope, start=start, end=end, completed=completed))
+    return list(crud.list_tasks(db, scope=scope, start=start, end=end, completed=completed, status=task_status))
 
 
 @router.post(
@@ -91,7 +96,7 @@ def update_task(task_id: int, payload: schemas.TaskUpdate, db: DbSession) -> Tas
     summary="Toggle task completion",
 )
 def toggle_task(task_id: int, db: DbSession) -> TaskItem:
-    """Flip a task between open and completed (stamps/clears ``completed_at``)."""
+    """Checkbox action: ``done`` → ``todo``, otherwise → ``done`` (stamps/clears ``completed_at``)."""
     task = _get_task_or_404(db, task_id)
     return crud.toggle_task(db, task)
 

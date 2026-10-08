@@ -206,6 +206,10 @@
   color: var(--negative);
 }
 
+.today-card__line strong.is-accent {
+  color: var(--accent);
+}
+
 .today-card__next,
 .today-card__overdue {
   margin: 0;

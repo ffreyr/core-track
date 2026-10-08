@@ -13,7 +13,7 @@
 
 import { api, type IsoDate, type Task } from "../../api";
 import { ErrorNotice, ScopeBadge } from "../../components/controls";
-import { RoundCheck } from "../../components/glance";
+import { RoundCheck, StatusAction } from "../../components/glance";
 import { Icon } from "../../components/Icon";
 import { useApiAction, useApiQuery } from "../../hooks/useApi";
 import { formatDateRange, formatLongDay, parseIsoDate } from "../../lib/dates";
@@ -91,6 +91,7 @@ export function DayPanel({ iso, onClose, onToggleTask }: DayPanelProps) {
               <li key={task.id} className={task.is_completed ? "item-row is-done" : "item-row"}>
                 <RoundCheck
                   checked={task.is_completed}
+                  inProgress={task.status === "in_progress"}
                   color={task.color ?? SCOPE_META[task.scope].color}
                   label={task.is_completed ? `Reopen ${task.title}` : `Complete ${task.title}`}
                   onToggle={() => onToggleTask(task)}
@@ -103,6 +104,11 @@ export function DayPanel({ iso, onClose, onToggleTask }: DayPanelProps) {
                     {task.priority > 0 ? `${PRIORITY_LABELS[task.priority]} priority` : null}
                   </span>
                 </button>
+                <StatusAction
+                  status={task.status}
+                  title={task.title}
+                  onChange={(next) => void run(() => api.tasks.setStatus(task.id, next))}
+                />
                 <ScopeBadge scope={task.scope} full />
               </li>
             ))}

@@ -44,6 +44,8 @@ CREATE TABLE financial_logs (
 );
 INSERT INTO tasks VALUES (1, 'Old task', NULL, 'daily', '2026-10-01', 0, NULL, 1, NULL,
                           '2026-10-01 10:00:00', '2026-10-01 10:00:00');
+INSERT INTO tasks VALUES (2, 'Finished task', NULL, 'daily', '2026-10-02', 1, '2026-10-02 18:00:00', 1, NULL,
+                          '2026-10-02 10:00:00', '2026-10-02 18:00:00');
 INSERT INTO financial_logs VALUES (1, 'expense', 12345, 'TRY', 'Rent', NULL, '2026-10-01',
                                    '2026-10-01 10:00:00', '2026-10-01 10:00:00');
 """
@@ -90,19 +92,21 @@ def test_phase_1_database_is_upgraded_with_data_preserved(tmp_path: Path) -> Non
         conn.executescript(PHASE_1_SCHEMA)
     engine = build_engine(f"sqlite:///{db_path}")
 
-    assert run_migrations(engine, _create_all, db_path) == [2]
+    assert run_migrations(engine, _create_all, db_path) == [2, 3]
     assert _user_version(db_path) == LATEST_VERSION
 
     with engine.connect() as conn:
-        task = conn.execute(text("SELECT title, end_date FROM tasks")).one()
+        tasks = conn.execute(text("SELECT title, end_date, status FROM tasks ORDER BY id")).all()
         log = conn.execute(text("SELECT amount_cents, is_paid FROM financial_logs")).one()
-    assert tuple(task) == ("Old task", None)
+    # Open tasks become "todo"; tasks already completed are backfilled to "done".
+    assert [tuple(row) for row in tasks] == [("Old task", None, "todo"), ("Finished task", None, "done")]
     # Pre-existing entries were real transactions, so they become "paid".
     assert tuple(log) == (12345, 1)
 
-    backups = list((tmp_path / "backups").glob("legacy-*-pre-v2.db"))
+    backups = list((tmp_path / "backups").glob(f"legacy-*-pre-v{LATEST_VERSION}.db"))
     assert len(backups) == 1
     assert "is_paid" not in _columns(backups[0], "financial_logs")  # snapshot of the old schema
+    assert "status" not in _columns(backups[0], "tasks")
     engine.dispose()
 
 
@@ -112,7 +116,7 @@ def test_running_twice_is_a_no_op(tmp_path: Path) -> None:
         conn.executescript(PHASE_1_SCHEMA)
     engine = build_engine(f"sqlite:///{db_path}")
 
-    assert run_migrations(engine, _create_all, db_path) == [2]
+    assert run_migrations(engine, _create_all, db_path) == [2, 3]
     assert run_migrations(engine, _create_all, db_path) == []
     assert len(list((tmp_path / "backups").iterdir())) == 1
     engine.dispose()
@@ -126,6 +130,24 @@ def test_interrupted_migration_can_be_resumed(tmp_path: Path) -> None:
         conn.execute("ALTER TABLE tasks ADD COLUMN end_date DATE")  # first step done, then "crash"
     engine = build_engine(f"sqlite:///{db_path}")
 
-    assert run_migrations(engine, _create_all, db_path) == [2]
+    assert run_migrations(engine, _create_all, db_path) == [2, 3]
     assert "is_paid" in _columns(db_path, "financial_logs")
+    assert "status" in _columns(db_path, "tasks")
+    engine.dispose()
+
+
+def test_v2_database_upgrades_to_task_status(tmp_path: Path) -> None:
+    """A database already at v2 (Phase 2.5) gains tasks.status only."""
+    db_path = tmp_path / "v2.db"
+    with _connect(db_path) as conn:
+        conn.executescript(PHASE_1_SCHEMA)
+        conn.execute("ALTER TABLE tasks ADD COLUMN end_date DATE")
+        conn.execute("ALTER TABLE financial_logs ADD COLUMN is_paid BOOLEAN NOT NULL DEFAULT 1")
+        conn.execute("PRAGMA user_version = 2")
+    engine = build_engine(f"sqlite:///{db_path}")
+
+    assert run_migrations(engine, _create_all, db_path) == [3]
+    with engine.connect() as conn:
+        statuses = conn.execute(text("SELECT title, status FROM tasks ORDER BY id")).all()
+    assert [tuple(row) for row in statuses] == [("Old task", "todo"), ("Finished task", "done")]
     engine.dispose()

@@ -41,7 +41,7 @@ interface SidebarProps {
 function TodayCard({ onOpenToday }: { onOpenToday: () => void }) {
   const { preferences } = usePreferences();
   const snapshot = useTodaySnapshot();
-  const { tasks, doneCount, summary, nextDue, overdueCount, health, todayDate } = snapshot;
+  const { tasks, doneCount, inProgressCount, summary, nextDue, overdueCount, health, todayDate } = snapshot;
   const currency = preferences.defaultCurrency;
   const weekday = todayDate.toLocaleDateString(undefined, { weekday: "short" });
 
@@ -58,6 +58,12 @@ function TodayCard({ onOpenToday }: { onOpenToday: () => void }) {
         <span>Tasks today</span>
         <strong>{tasks ? `${tasks.length - doneCount} left` : "…"}</strong>
       </div>
+      {inProgressCount > 0 ? (
+        <div className="today-card__line">
+          <span>In progress</span>
+          <strong className="is-accent">{inProgressCount}</strong>
+        </div>
+      ) : null}
       <div className="today-card__line">
         <span>Remaining</span>
         <strong className={summary && summary.remaining_budget < 0 ? "is-negative" : "is-positive"}>

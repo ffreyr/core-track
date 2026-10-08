@@ -3,7 +3,8 @@
  *
  * In create mode the date and scope are prefilled from where the user
  * clicked (a calendar day, a Tasks-board lane). In edit mode every field is
- * editable, including completion, and the task can be deleted.
+ * editable and the task can be deleted. The status (To do / In progress /
+ * Done) can be chosen in both modes.
  *
  * Multi-day tasks: an optional "Until" date turns the task into a block
  * spanning several days on the calendar. Clearing it (or choosing the same
@@ -13,12 +14,21 @@
 
 import { useState, type FormEvent } from "react";
 
-import { api, TASK_SCOPES, type IsoDate, type Task, type TaskPriority, type TaskScope } from "../../api";
+import {
+  api,
+  TASK_SCOPES,
+  TASK_STATUSES,
+  type IsoDate,
+  type Task,
+  type TaskPriority,
+  type TaskScope,
+  type TaskStatus,
+} from "../../api";
 import { ConfirmDeleteButton, Field, SegmentedControl } from "../../components/controls";
 import { Modal } from "../../components/Modal";
 import { useApiAction } from "../../hooks/useApi";
 import { addDays, diffInDays, parseIsoDate, toIsoDate } from "../../lib/dates";
-import { PRIORITY_LABELS, SCOPE_META, TASK_COLOR_SWATCHES } from "../../lib/labels";
+import { PRIORITY_LABELS, SCOPE_META, STATUS_LABELS, TASK_COLOR_SWATCHES } from "../../lib/labels";
 
 export interface TaskEditorProps {
   /** Existing task to edit; omit to create a new one. */
@@ -46,7 +56,7 @@ export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose 
   const [endDate, setEndDate] = useState<IsoDate>(task?.end_date ?? "");
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? 1);
   const [color, setColor] = useState<string | null>(task?.color ?? null);
-  const [isCompleted, setIsCompleted] = useState(task?.is_completed ?? false);
+  const [status, setStatus] = useState<TaskStatus>(task?.status ?? "todo");
   const [saving, setSaving] = useState(false);
   const [titleError, setTitleError] = useState<string | null>(null);
   const [rangeError, setRangeError] = useState<string | null>(null);
@@ -93,9 +103,10 @@ export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose 
       end_date: endDate && endDate !== dueDate ? endDate : null,
       priority,
       color,
+      status,
     };
     const result = isEdit
-      ? await run(() => api.tasks.update(task.id, { ...fields, is_completed: isCompleted }), { success: "Task saved" })
+      ? await run(() => api.tasks.update(task.id, fields), { success: "Task saved" })
       : await run(() => api.tasks.create(fields), { success: "Task added" });
     setSaving(false);
     if (result.ok) {
@@ -145,6 +156,15 @@ export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose 
               setTitle(event.target.value);
               setTitleError(null);
             }}
+          />
+        </Field>
+
+        <Field label="Status">
+          <SegmentedControl
+            label="Status"
+            value={status}
+            onChange={setStatus}
+            options={TASK_STATUSES.map((value) => ({ value, label: STATUS_LABELS[value] }))}
           />
         </Field>
 
@@ -251,12 +271,6 @@ export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose 
           />
         </Field>
 
-        {isEdit ? (
-          <label className="checkbox-row">
-            <input type="checkbox" checked={isCompleted} onChange={(event) => setIsCompleted(event.target.checked)} />
-            Completed
-          </label>
-        ) : null}
       </form>
     </Modal>
   );

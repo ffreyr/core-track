@@ -2,7 +2,7 @@
  * Display metadata (labels, short codes, colors) for enums coming from the API.
  */
 
-import type { FinanceKind, TaskPriority, TaskScope } from "../api";
+import type { FinanceKind, TaskPriority, TaskScope, TaskStatus } from "../api";
 
 /** Human-readable label, single-letter badge and accent color for each scope. */
 export const SCOPE_META: Record<TaskScope, { label: string; short: string; color: string }> = {
@@ -10,6 +10,13 @@ export const SCOPE_META: Record<TaskScope, { label: string; short: string; color
   weekly: { label: "Weekly", short: "W", color: "#8b5cf6" },
   monthly: { label: "Monthly", short: "M", color: "#f59e0b" },
   yearly: { label: "Yearly", short: "Y", color: "#ec4899" },
+};
+
+/** Labels for the task workflow statuses. */
+export const STATUS_LABELS: Record<TaskStatus, string> = {
+  todo: "To do",
+  in_progress: "In progress",
+  done: "Done",
 };
 
 /** Labels for the four priority levels. */
