@@ -253,8 +253,9 @@ export function CashFlowSheet({
               <SumCell
                 key={`${month.key}-ti`}
                 className="sheet-sum sheet-sum--income"
+                title="Income received this month (expected income not included)"
                 label={<SumLabel {...LABELS.totalIncome} />}
-                value={formatMoney(month.summary.income_total, currency)}
+                value={formatMoney(month.summary.income_received, currency)}
               />,
               <SumCell
                 key={`${month.key}-te`}
@@ -292,7 +293,7 @@ export function CashFlowSheet({
                   key={`${month.key}-rem`}
                   colSpan={2}
                   className={remaining < 0 ? "sheet-remaining is-negative" : "sheet-remaining"}
-                  title="Income − paid expenses − pending expenses"
+                  title="Received income − paid expenses − pending expenses"
                 >
                   <span className="sheet-remaining__label">
                     {LABELS.remaining.en} <span className="sheet__tr">· {LABELS.remaining.tr}</span>

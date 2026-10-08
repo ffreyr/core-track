@@ -8,6 +8,18 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(() => ({
   plugins: [react()],
 
+  // Two HTML entry points: the main app and the desktop widget window
+  // (`widget` in tauri.conf.json loads widget.html). Each gets its own
+  // bundle, so the widget does not load the full application code.
+  build: {
+    rollupOptions: {
+      input: {
+        main: "index.html",
+        widget: "widget.html",
+      },
+    },
+  },
+
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
   // 1. prevent Vite from obscuring rust errors

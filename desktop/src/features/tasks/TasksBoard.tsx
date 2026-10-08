@@ -14,6 +14,7 @@
 
 import { api, TASK_SCOPES, type Task, type TaskScope } from "../../api";
 import { ErrorNotice } from "../../components/controls";
+import { RoundCheck } from "../../components/glance";
 import { Icon } from "../../components/Icon";
 import { useApiAction, useApiQuery } from "../../hooks/useApi";
 import {
@@ -75,7 +76,7 @@ export function TasksBoard({ anchor, onAnchorChange }: TasksBoardProps) {
 
   return (
     <div className="tasks-board">
-      <header className="toolbar">
+      <header className="toolbar" data-tauri-drag-region>
         <div className="toolbar__group">
           <button type="button" className="button" onClick={() => onAnchorChange(today())}>
             Today
@@ -142,11 +143,11 @@ export function TasksBoard({ anchor, onAnchorChange }: TasksBoardProps) {
                 <ul className="item-list">
                   {tasks.map((task) => (
                     <li key={task.id} className={task.is_completed ? "item-row is-done" : "item-row"}>
-                      <input
-                        type="checkbox"
+                      <RoundCheck
                         checked={task.is_completed}
-                        onChange={() => void run(() => api.tasks.toggle(task.id))}
-                        aria-label={`Toggle ${task.title}`}
+                        color={task.color ?? SCOPE_META[task.scope].color}
+                        label={task.is_completed ? `Reopen ${task.title}` : `Complete ${task.title}`}
+                        onToggle={() => void run(() => api.tasks.toggle(task.id))}
                       />
                       <button type="button" className="item-row__main" onClick={() => openTask({ task })}>
                         <span className="item-row__title">

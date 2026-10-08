@@ -1,10 +1,11 @@
 /*
- * App shell: sidebar, main area, toolbars, panels and shared list rows.
+ * App shell: sidebar (brand, navigation, Today card, footer), main area,
+ * toolbars, panels and shared list rows.
  */
 
 .app {
   display: grid;
-  grid-template-columns: 208px minmax(0, 1fr);
+  grid-template-columns: 228px minmax(0, 1fr);
   height: 100%;
 }
 
@@ -13,24 +14,57 @@
 .sidebar {
   display: flex;
   flex-direction: column;
-  padding: 16px 10px 12px;
+  gap: 14px;
+  min-height: 0;
+  padding: 16px 12px 12px;
+  overflow-y: auto;
   border-right: 1px solid var(--border);
-  background: var(--surface-2);
+  background: var(--sidebar-bg);
+}
+
+/* Overlay title bar: the traffic lights sit in this strip (macOS app only). */
+.sidebar.has-native-titlebar {
+  padding-top: 0;
+}
+
+.sidebar__titlebar {
+  flex-shrink: 0;
+  height: 38px;
+  margin: 0 -12px -6px;
 }
 
 .sidebar__brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px 18px;
+  gap: 10px;
+  padding: 2px 6px 4px;
+}
+
+.sidebar__logo {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  /* The artwork has its own rounded corners; a soft lift helps it pop. */
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
+}
+
+.sidebar__brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.sidebar__name {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
-.sidebar__logo {
-  color: var(--accent);
-  font-size: 17px;
+.sidebar__version {
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .sidebar__nav {
@@ -43,19 +77,21 @@
 }
 
 .sidebar__link {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 11px;
   width: 100%;
-  height: 36px;
-  padding: 0 10px;
+  height: 38px;
+  padding: 0 12px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   background: transparent;
   color: var(--text-muted);
   font-weight: 500;
   text-align: left;
   cursor: pointer;
+  transition: background 0.12s, color 0.12s;
 }
 
 .sidebar__link:hover {
@@ -64,23 +100,149 @@
 }
 
 .sidebar__link.is-active {
-  background: var(--accent-soft);
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.sidebar__link.is-active svg {
   color: var(--accent);
 }
+
+/* Accent bar on the active item. */
+.sidebar__link.is-active::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+.sidebar__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: auto;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* ---- Today card (sidebar) ---------------------------------------------- */
+
+.today-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 100%;
+  padding: 12px 12px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.today-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.today-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+}
+
+.today-card__date {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.today-card__weekday {
+  color: var(--negative);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.today-card__day {
+  font-family: var(--font-rounded);
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.today-card__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.today-card__line strong {
+  font-family: var(--font-rounded);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.today-card__line strong.is-positive {
+  color: var(--positive);
+}
+
+.today-card__line strong.is-negative {
+  color: var(--negative);
+}
+
+.today-card__next,
+.today-card__overdue {
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.today-card__next {
+  color: var(--text-muted);
+}
+
+.today-card__next strong {
+  color: var(--pending);
+  font-weight: 600;
+}
+
+.today-card__overdue {
+  color: var(--negative);
+  font-weight: 600;
+}
+
+/* ---- Connection status ------------------------------------------------- */
 
 .connection {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: auto;
-  padding: 8px 10px;
-  color: var(--text-muted);
-  font-size: 13px;
+  padding: 6px 12px;
+  color: var(--text-faint);
+  font-size: 12px;
 }
 
 .connection__dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--text-faint);
 }
@@ -107,6 +269,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  background: var(--bg);
 }
 
 .toolbar {
@@ -115,7 +278,8 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px 16px;
-  padding: 12px 18px;
+  min-height: 60px;
+  padding: 11px 20px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
@@ -127,33 +291,46 @@
 }
 
 .toolbar__title {
-  min-width: 170px;
-  font-size: 20px;
-  letter-spacing: -0.01em;
+  min-width: 180px;
+  font-family: var(--font-rounded);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 .toolbar__stats {
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
 }
 
 .stat {
   display: flex;
   flex-direction: column;
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
   line-height: 1.25;
 }
 
+.stat + .stat {
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+}
+
 .stat__label {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 10.5px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   color: var(--text-faint);
 }
 
 .stat__value {
-  font-weight: 600;
+  font-family: var(--font-rounded);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -164,6 +341,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .panel > h2 {
@@ -183,13 +361,12 @@
   font-size: 15px;
 }
 
-
 .panel__lead {
   margin: 0 0 12px;
   color: var(--text-muted);
 }
 
-/* ---- List rows (day panel, task lanes, pending list) ------------------- */
+/* ---- List rows (day panel, task lanes) --------------------------------- */
 
 .item-list {
   display: flex;
@@ -204,8 +381,9 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 5px 6px;
+  padding: 6px 8px;
   border-radius: var(--radius-sm);
+  transition: background 0.1s;
 }
 
 .item-row:hover {
@@ -248,7 +426,8 @@
 }
 
 .item-row__amount {
-  font-weight: 600;
+  font-family: var(--font-rounded);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }

@@ -266,10 +266,10 @@ class FinanceSummary(BaseModel):
     * ``expense_total``     – all expenses (paid + pending).
     * ``expense_paid``      – expenses already paid.
     * ``expense_pending``   – planned expenses not yet paid.
-    * ``remaining_budget``  – ``income_total − expense_paid − expense_pending``:
-      what is left of this month's income once every known obligation is
-      covered. Numerically equal to ``net``; exposed under its own name
-      because it is the headline figure of the cash-flow view.
+    * ``remaining_budget``  – ``income_received − expense_paid − expense_pending``:
+      what is left of the income actually received once every known
+      obligation is covered. Expected (pending) income is not counted until
+      it is marked received. The headline figure of the cash-flow view.
     * ``cash_balance``      – ``income_received − expense_paid``: money that
       has actually moved so far this month.
 

@@ -1,0 +1,385 @@
+/*
+ * Desktop widget window — styled after native macOS widgets.
+ *
+ * Inside Tauri the window is transparent and macOS draws a native frosted
+ * "HUD" background (windowEffects in tauri.conf.json), so the page itself
+ * stays transparent and only adds a light tint. In a plain browser (no
+ * native blur) `.widget:not(.is-native)` falls back to a solid card.
+ */
+
+html,
+body.widget-body,
+body.widget-body #root {
+  height: 100%;
+  margin: 0;
+  /* Override base.css's page background so the native blur shows through. */
+  background: transparent !important;
+  overflow: hidden;
+}
+
+:root {
+  --widget-tint: rgba(255, 255, 255, 0.4);
+  --widget-card: rgba(255, 255, 255, 0.55);
+  --widget-line: rgba(0, 0, 0, 0.07);
+  --widget-track: rgba(0, 0, 0, 0.08);
+  --widget-hover: rgba(0, 0, 0, 0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --widget-tint: rgba(16, 18, 28, 0.3);
+    --widget-card: rgba(255, 255, 255, 0.06);
+    --widget-line: rgba(255, 255, 255, 0.08);
+    --widget-track: rgba(255, 255, 255, 0.1);
+    --widget-hover: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.widget {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  padding: 16px 16px 10px;
+  border-radius: 18px;
+  background: var(--widget-tint);
+  color: var(--text);
+  font-size: 13.5px;
+}
+
+/* Browser fallback: no native blur available. */
+.widget:not(.is-native) {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+/* ---- Header: date + progress ring (drag handle) ---- */
+
+.widget__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: grab;
+}
+
+.widget__date {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.05;
+}
+
+.widget__weekday {
+  color: var(--negative);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.widget__day {
+  overflow: hidden;
+  font-family: var(--font-rounded);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.widget__day span {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Header buttons fade in on hover only, keeping the widget calm. */
+.widget__actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.widget:hover .widget__actions,
+.widget__actions:focus-within {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.widget__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.widget__icon-button:hover {
+  background: var(--widget-hover);
+  color: var(--text);
+}
+
+/* ---- Tasks ---- */
+
+.widget__tasks {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.widget__list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  margin: 0 -6px;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+/* Fade the last line only when the list overflows and scrolls. */
+.widget__list.is-scrollable {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 14px), transparent);
+}
+
+.widget__task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  padding: 4px 6px;
+  border-radius: 9px;
+  transition: background 0.12s;
+}
+
+.widget__task:hover {
+  background: var(--widget-hover);
+}
+
+.widget__task-title {
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.widget__task.is-done .widget__task-title {
+  color: var(--text-faint);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--text-faint) 60%, transparent);
+}
+
+.widget__priority {
+  flex-shrink: 0;
+  color: var(--negative);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.widget__span {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--widget-track);
+  color: var(--text-muted);
+  font-family: var(--font-rounded);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.widget__empty {
+  margin: 6px 0;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.widget__all-clear {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.widget__all-clear-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--positive-soft);
+  color: var(--positive);
+  font-size: 17px;
+  font-weight: 800;
+}
+
+/* ---- Budget card ---- */
+
+.widget__budget {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 12px 12px;
+  border: 1px solid var(--widget-line);
+  border-radius: 14px;
+  background: var(--widget-card);
+}
+
+.widget:not(.is-native) .widget__budget {
+  background: var(--surface-2);
+}
+
+.widget__budget-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.widget__budget-head .health-pill {
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.widget__amount {
+  color: var(--positive);
+  font-family: var(--font-rounded);
+  font-size: 30px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.widget__budget.is-tight .widget__amount {
+  color: var(--pending);
+}
+
+.widget__budget.is-over .widget__amount {
+  color: var(--negative);
+}
+
+/* Segmented bar: small gaps between segments, rounded ends. */
+.widget__bar {
+  display: flex;
+  gap: 2px;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--widget-track);
+}
+
+.widget__bar span {
+  border-radius: 4px;
+  transition: width 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.widget__bar span[style*="width: 0%"] {
+  display: none;
+}
+
+.widget__bar .is-paid {
+  background: var(--negative);
+}
+
+.widget__bar .is-pending {
+  background: var(--pending);
+}
+
+.widget__bar .is-remaining {
+  background: var(--positive);
+}
+
+.widget__budget-meta {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.widget__budget-meta strong {
+  color: var(--pending);
+  font-weight: 600;
+}
+
+.widget__budget-meta .is-overdue {
+  color: var(--negative);
+  font-weight: 700;
+}
+
+/* ---- Footer ---- */
+
+.widget__footer {
+  display: flex;
+  justify-content: center;
+}
+
+.widget__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.widget__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--positive);
+}
+
+.widget__status.is-offline {
+  color: var(--negative);
+}
+
+.widget__status.is-offline .widget__status-dot {
+  background: var(--negative);
+}
+
+/* Tiny toasts inside the small widget window. */
+body.widget-body .toast-stack {
+  right: 10px;
+  bottom: 10px;
+}
+
+body.widget-body .toast {
+  max-width: 260px;
+  padding: 7px 10px;
+  font-size: 12px;
+}

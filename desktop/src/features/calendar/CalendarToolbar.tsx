@@ -45,7 +45,7 @@ export function CalendarToolbar({
   onAddFinance,
 }: CalendarToolbarProps) {
   return (
-    <header className="toolbar">
+    <header className="toolbar" data-tauri-drag-region>
       <div className="toolbar__group">
         <button type="button" className="button" onClick={onToday} title="Jump to today (T)">
           Today
@@ -58,7 +58,7 @@ export function CalendarToolbar({
             <Icon name="chevronRight" />
           </button>
         </div>
-        <h1 className="toolbar__title">{title}</h1>
+        <h1 className="toolbar__title" data-tauri-drag-region>{title}</h1>
         <span className={refreshing ? "sync-spinner is-active" : "sync-spinner"} aria-hidden="true" />
       </div>
 

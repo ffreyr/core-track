@@ -74,8 +74,8 @@ export function SettingsView() {
 
   return (
     <div className="settings-view">
-      <header className="toolbar">
-        <h1 className="toolbar__title">Settings</h1>
+      <header className="toolbar" data-tauri-drag-region>
+        <h1 className="toolbar__title" data-tauri-drag-region>Settings</h1>
       </header>
 
       <div className="settings-scroll">

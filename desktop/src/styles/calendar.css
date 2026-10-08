@@ -56,8 +56,8 @@
 }
 
 .calendar-grid__weekday {
-  padding: 7px 10px;
-  font-size: 12px;
+  padding: 8px 12px;
+  font-size: 11.5px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -95,12 +95,18 @@
   transition: background 0.1s, box-shadow 0.1s;
 }
 
+/* Weekends: a whisper of tint so the working week reads as a block. */
+.calendar-day-bg.is-weekend {
+  background: color-mix(in srgb, var(--surface-2) 55%, var(--surface));
+}
+
 .calendar-day-bg.is-outside {
   background: var(--surface-2);
 }
 
 .calendar-day-bg.is-today {
-  background: color-mix(in srgb, var(--today) 5%, var(--surface));
+  background: color-mix(in srgb, var(--today) 7%, var(--surface));
+  box-shadow: inset 0 2px 0 var(--today);
 }
 
 .calendar-day-bg.is-selected {
@@ -144,12 +150,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 5px;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
+  min-width: 25px;
+  height: 25px;
+  padding: 0 6px;
+  border-radius: 13px;
+  font-family: var(--font-rounded);
+  font-size: 14.5px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
@@ -160,6 +167,7 @@
 .calendar-day-header__number.is-today {
   background: var(--today);
   color: var(--accent-text);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--today) 45%, transparent);
 }
 
 .calendar-day-header__weekday,
@@ -208,9 +216,10 @@
   align-self: start;
   height: var(--item-height);
   margin: 0 5px;
-  padding: 0 7px;
-  border-radius: 5px;
-  background: var(--chip-accent);
+  padding: 0 8px;
+  border-radius: 7px;
+  /* Subtle top highlight gives the solid bar a little depth. */
+  background: linear-gradient(rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0)) var(--chip-accent);
   color: #fff;
   font-size: var(--chip-font);
   font-weight: 600;
@@ -320,9 +329,9 @@
   gap: 6px;
   min-width: 0;
   height: var(--item-height);
-  padding: 0 6px;
+  padding: 0 7px;
   border: none;
-  border-radius: 5px;
+  border-radius: 7px;
   font-size: var(--chip-font);
   text-align: left;
   cursor: grab;
@@ -335,7 +344,12 @@
 .chip--task {
   /* Accent strip on the left + a faint tint of the same color. */
   border-left: 3px solid var(--chip-accent);
-  background: color-mix(in srgb, var(--chip-accent) 13%, var(--surface));
+  border-radius: 4px 7px 7px 4px;
+  background: color-mix(in srgb, var(--chip-accent) 14%, var(--surface));
+}
+
+.chip--task:hover {
+  background: color-mix(in srgb, var(--chip-accent) 22%, var(--surface));
 }
 
 .chip--task.is-high-priority .chip__label {
@@ -403,6 +417,7 @@
 
 .chip__amount {
   flex-shrink: 0;
+  font-family: var(--font-rounded);
   font-weight: 700;
 }
 

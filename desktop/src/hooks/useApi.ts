@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState, type DependencyList } from "react";
 
 import { errorMessage, isAbortError } from "../api";
+import { broadcastDataChanged } from "../lib/desktopBridge";
 import { useDataVersion } from "../state/sync";
 import { useToast } from "../state/toasts";
 
@@ -138,6 +139,8 @@ export function useApiAction(): <T>(action: () => Promise<T>, options?: ActionOp
       try {
         const value = await action();
         invalidate();
+        // Let the other desktop windows (main app ⇄ widget) refresh right away.
+        broadcastDataChanged();
         if (options.success) {
           toast.success(options.success);
         }

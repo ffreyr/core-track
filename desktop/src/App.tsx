@@ -6,55 +6,38 @@
  *   → Editors (dialogs use toasts, preferences and data invalidation).
  *
  * Navigation state (active tab, anchor date, selected day) lives here so tabs
- * can hand off to each other — e.g. clicking a bar in the Finance chart opens
+ * can hand off to each other — e.g. clicking a day in the Finance sheet opens
  * the Calendar positioned on that day with its panel open.
  */
 
 import { useCallback, useState } from "react";
 
 import type { IsoDate } from "./api";
-import { Icon, type IconName } from "./components/Icon";
 import { CalendarView } from "./features/calendar/CalendarView";
 import { EditorsProvider } from "./features/editors/EditorsProvider";
 import { FinanceView } from "./features/finance/FinanceView";
 import { SettingsView } from "./features/settings/SettingsView";
+import { Sidebar, type Tab } from "./features/shell/Sidebar";
 import { TasksBoard } from "./features/tasks/TasksBoard";
 import { useLocalStorage } from "./hooks/useLocalStorage";
-import { parseIsoDate, today } from "./lib/dates";
+import { parseIsoDate, toIsoDate, today } from "./lib/dates";
+import { inDesktopApp } from "./lib/desktopBridge";
 import { PreferencesProvider, usePreferences } from "./state/preferences";
-import { DataSyncProvider, useSyncStatus } from "./state/sync";
+import { DataSyncProvider } from "./state/sync";
 import { ToastProvider } from "./state/toasts";
 
-type Tab = "calendar" | "tasks" | "finance" | "settings";
-
-const TABS: readonly { id: Tab; label: string; icon: IconName }[] = [
-  { id: "calendar", label: "Calendar", icon: "calendar" },
-  { id: "tasks", label: "Tasks", icon: "tasks" },
-  { id: "finance", label: "Finance", icon: "wallet" },
-  { id: "settings", label: "Settings", icon: "settings" },
-];
+const TABS: readonly Tab[] = ["calendar", "tasks", "finance", "settings"];
 
 /** Sanitise the remembered tab (guards against stale/invalid stored values). */
 function sanitizeTab(stored: unknown): Tab {
-  return TABS.some((tab) => tab.id === stored) ? (stored as Tab) : "calendar";
+  return TABS.includes(stored as Tab) ? (stored as Tab) : "calendar";
 }
 
-/** Sidebar footer: live backend connection indicator. */
-function ConnectionIndicator() {
-  const status = useSyncStatus();
-  const label =
-    status.state === "online"
-      ? `Synced ${status.lastSyncedAt?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) ?? ""}`
-      : status.state === "offline"
-        ? "Offline"
-        : "Connecting…";
-  return (
-    <div className={`connection connection--${status.state}`} title={status.message ?? label}>
-      <span className="connection__dot" aria-hidden="true" />
-      <span>{label}</span>
-    </div>
-  );
-}
+/**
+ * Inside the macOS app the main window uses an overlay title bar
+ * (tauri.conf.json), so the layout must leave room for the traffic lights.
+ */
+const nativeTitleBar = inDesktopApp && navigator.userAgent.includes("Mac");
 
 /** Everything inside the providers. */
 function Shell() {
@@ -74,31 +57,13 @@ function Shell() {
   );
 
   return (
-    <div className="app">
-      <nav className="sidebar" aria-label="Main">
-        <div className="sidebar__brand">
-          <span className="sidebar__logo" aria-hidden="true">
-            ◆
-          </span>
-          Core-Track
-        </div>
-        <ul className="sidebar__nav">
-          {TABS.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                className={item.id === tab ? "sidebar__link is-active" : "sidebar__link"}
-                onClick={() => setTab(item.id)}
-                aria-current={item.id === tab ? "page" : undefined}
-              >
-                <Icon name={item.icon} size={18} />
-                {item.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-        <ConnectionIndicator />
-      </nav>
+    <div className={nativeTitleBar ? "app has-native-titlebar" : "app"}>
+      <Sidebar
+        tab={tab}
+        onTabChange={setTab}
+        nativeTitleBar={nativeTitleBar}
+        onOpenToday={() => openDayInCalendar(toIsoDate(today()))}
+      />
 
       <main className="main">
         {tab === "calendar" ? (

@@ -11,6 +11,8 @@
  *    (only while the window is visible, to avoid useless traffic).
  *  - Returning to the window (focus / visibility) calls `invalidate()` so the
  *    screen is current the moment the user looks at it.
+ *  - Another desktop window (main app ⇄ widget) announcing a change calls
+ *    `invalidate()` too (see lib/desktopBridge.ts).
  *
  * Two separate contexts are used on purpose: `version` changes trigger
  * refetches, while `status` changes (after every response) only re-render
@@ -28,6 +30,7 @@ import {
 } from "react";
 
 import { ApiError, errorMessage } from "../api";
+import { onDataChangedElsewhere } from "../lib/desktopBridge";
 
 /** Connection state shown in the sidebar footer. */
 export interface SyncStatus {
@@ -80,6 +83,9 @@ export function DataSyncProvider({ pollIntervalSec, children }: { pollIntervalSe
     }, pollIntervalSec * 1000);
     return () => window.clearInterval(timer);
   }, [pollIntervalSec, invalidate]);
+
+  // Refresh immediately when another desktop window (widget ⇄ main) changed data.
+  useEffect(() => onDataChangedElsewhere(invalidate), [invalidate]);
 
   // Refresh when the user comes back to the app.
   useEffect(() => {

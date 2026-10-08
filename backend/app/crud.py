@@ -410,8 +410,9 @@ def monthly_finance_summary(db: Session, year: int, month: int) -> schemas.Finan
         expense_paid=cents_to_decimal(expense.paid),
         expense_pending=cents_to_decimal(expense.pending),
         net=cents_to_decimal(net_cents),
-        # income − paid − pending; identical to net by definition.
-        remaining_budget=cents_to_decimal(income.total - expense.paid - expense.pending),
+        # received income − paid − pending: expected (not yet received)
+        # income is deliberately left out until it actually arrives.
+        remaining_budget=cents_to_decimal(income.paid - expense.paid - expense.pending),
         cash_balance=cents_to_decimal(income.paid - expense.paid),
         entry_count=entry_count,
         pending_count=len(pending_logs),

@@ -72,7 +72,7 @@ export function FinanceView({ anchor, onAnchorChange, onOpenDay }: FinanceViewPr
 
   return (
     <div className="finance-view">
-      <header className="toolbar">
+      <header className="toolbar" data-tauri-drag-region>
         <div className="toolbar__group">
           <button type="button" className="button" onClick={() => onAnchorChange(today())}>
             This month
@@ -97,7 +97,7 @@ export function FinanceView({ anchor, onAnchorChange, onOpenDay }: FinanceViewPr
               <Icon name="chevronRight" />
             </button>
           </div>
-          <h1 className="toolbar__title">{rangeTitle}</h1>
+          <h1 className="toolbar__title" data-tauri-drag-region>{rangeTitle}</h1>
           <span className={sheet.loading ? "sync-spinner is-active" : "sync-spinner"} aria-hidden="true" />
         </div>
 

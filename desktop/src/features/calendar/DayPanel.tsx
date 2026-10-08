@@ -13,10 +13,11 @@
 
 import { api, type IsoDate, type Task } from "../../api";
 import { ErrorNotice, ScopeBadge } from "../../components/controls";
+import { RoundCheck } from "../../components/glance";
 import { Icon } from "../../components/Icon";
 import { useApiAction, useApiQuery } from "../../hooks/useApi";
 import { formatDateRange, formatLongDay, parseIsoDate } from "../../lib/dates";
-import { PRIORITY_LABELS } from "../../lib/labels";
+import { PRIORITY_LABELS, SCOPE_META } from "../../lib/labels";
 import { formatMoney } from "../../lib/money";
 import { usePreferences } from "../../state/preferences";
 import { useEditors } from "../editors/EditorsProvider";
@@ -88,11 +89,11 @@ export function DayPanel({ iso, onClose, onToggleTask }: DayPanelProps) {
           <ul className="item-list">
             {tasks.map((task) => (
               <li key={task.id} className={task.is_completed ? "item-row is-done" : "item-row"}>
-                <input
-                  type="checkbox"
+                <RoundCheck
                   checked={task.is_completed}
-                  onChange={() => onToggleTask(task)}
-                  aria-label={`Toggle ${task.title}`}
+                  color={task.color ?? SCOPE_META[task.scope].color}
+                  label={task.is_completed ? `Reopen ${task.title}` : `Complete ${task.title}`}
+                  onToggle={() => onToggleTask(task)}
                 />
                 <button type="button" className="item-row__main" onClick={() => openTask({ task })}>
                   <span className="item-row__title">{task.title}</span>

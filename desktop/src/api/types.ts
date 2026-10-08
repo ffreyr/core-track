@@ -151,7 +151,7 @@ export interface DailyNet {
 /**
  * Response of `GET /api/finance/summary`: a forward-looking cash-flow view.
  *
- * `remaining_budget = income_total − expense_paid − expense_pending`
+ * `remaining_budget = income_received − expense_paid − expense_pending`
  * `cash_balance     = income_received − expense_paid`
  */
 export interface FinanceSummary {

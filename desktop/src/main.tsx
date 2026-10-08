@@ -7,6 +7,7 @@ import ReactDOM from "react-dom/client";
 
 import App from "./App";
 import "./styles/base.css";
+import "./styles/glance.css";
 import "./styles/layout.css";
 import "./styles/calendar.css";
 import "./styles/views.css";

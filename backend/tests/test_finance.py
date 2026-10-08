@@ -130,9 +130,9 @@ def test_cash_flow_summary_with_pending_entries(client: TestClient) -> None:
     assert summary["expense_paid"] == 16000
     assert summary["expense_pending"] == 2999.9
     assert summary["expense_total"] == 18999.9
-    # Remaining budget = income − paid − pending.
-    assert summary["remaining_budget"] == 45000 - 16000 - 2999.9
-    assert summary["remaining_budget"] == summary["net"]
+    # Remaining budget = received income − paid − pending (expected income excluded).
+    assert summary["remaining_budget"] == 40000 - 16000 - 2999.9
+    assert summary["net"] == 45000 - 18999.9
     # Cash actually moved so far = received − paid.
     assert summary["cash_balance"] == 24000
 

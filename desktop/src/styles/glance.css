@@ -1,0 +1,126 @@
+/*
+ * Styles for the glanceable primitives in components/glance.tsx
+ * (ProgressRing, RoundCheck) and the budget health pill. Shared by the
+ * main app (sidebar Today card) and the desktop widget.
+ */
+
+/* ---- ProgressRing ---- */
+
+.progress-ring {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.progress-ring svg {
+  position: absolute;
+  inset: 0;
+}
+
+.progress-ring__track {
+  fill: none;
+  stroke: var(--surface-2);
+}
+
+.progress-ring__value {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.45s cubic-bezier(0.2, 0.8, 0.2, 1), stroke 0.2s;
+}
+
+.progress-ring.is-complete .progress-ring__value {
+  stroke: var(--positive);
+}
+
+.progress-ring__label {
+  position: relative;
+  color: var(--text);
+  font-family: var(--font-rounded);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-ring.is-complete .progress-ring__label {
+  display: inline-flex;
+  color: var(--positive);
+}
+
+/* ---- RoundCheck (Reminders-style checkbox) ---- */
+
+.round-check {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border: 2px solid var(--check-color);
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+
+.round-check svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.15s, transform 0.2s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.round-check:hover {
+  background: color-mix(in srgb, var(--check-color) 18%, transparent);
+}
+
+.round-check.is-checked {
+  background: var(--check-color);
+  animation: check-pop 0.28s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+.round-check.is-checked svg {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.round-check:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes check-pop {
+  50% {
+    transform: scale(1.18);
+  }
+}
+
+/* ---- Budget health pill (On track / Tight / Over budget) ---- */
+
+.health-pill {
+  align-self: flex-start;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.health-pill--on-track {
+  background: var(--positive-soft);
+  color: var(--positive);
+}
+
+.health-pill--tight {
+  background: var(--pending-soft);
+  color: var(--pending);
+}
+
+.health-pill--over {
+  background: var(--negative-soft);
+  color: var(--negative);
+}

@@ -31,7 +31,7 @@
 import { memo, useMemo, type CSSProperties, type MouseEvent, type DragEvent } from "react";
 
 import type { CalendarDay, IsoDate, Task } from "../../api";
-import { formatMonthShort, formatWeekdayShort, toIsoDate } from "../../lib/dates";
+import { formatMonthShort, formatWeekdayShort, isWeekend, toIsoDate } from "../../lib/dates";
 import { formatMoney } from "../../lib/money";
 import type { Preferences } from "../../state/preferences";
 import { FinanceChip, TaskBar, TaskChip } from "./Chips";
@@ -154,6 +154,7 @@ function CalendarWeekRowComponent({
         const className = [
           "calendar-day-bg",
           outside ? "is-outside" : "",
+          isWeekend(date) ? "is-weekend" : "",
           iso === todayIso ? "is-today" : "",
           iso === selectedIso ? "is-selected" : "",
           iso === dropTargetIso ? "is-drop-target" : "",

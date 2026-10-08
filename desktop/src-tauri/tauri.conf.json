@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Core-Track",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "identifier": "com.coretrack.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -10,14 +10,49 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
+        "label": "main",
         "title": "Core-Track",
+        "url": "index.html",
         "width": 1320,
         "height": 860,
         "minWidth": 960,
         "minHeight": 620,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 18,
+          "y": 24
+        }
+      },
+      {
+        "label": "widget",
+        "title": "Core-Track Widget",
+        "url": "widget.html",
+        "width": 300,
+        "height": 400,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "visible": false,
+        "skipTaskbar": true,
+        "alwaysOnBottom": true,
+        "visibleOnAllWorkspaces": true,
+        "focus": false,
+        "dragDropEnabled": false,
+        "windowEffects": {
+          "effects": [
+            "hudWindow"
+          ],
+          "state": "active",
+          "radius": 18
+        }
       }
     ],
     "security": {
