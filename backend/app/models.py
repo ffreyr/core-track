@@ -1,12 +1,14 @@
 """SQLAlchemy ORM models.
 
-Two tables back the whole application:
+Three tables back the whole application:
 
 * ``tasks``          – :class:`TaskItem`, a to-do entry anchored to a calendar
   day (or a span of days) and tagged with a planning scope
   (daily / weekly / monthly / yearly).
 * ``financial_logs`` – :class:`FinancialLog`, a single income or expense,
   either already settled (``is_paid``) or planned for a future date.
+* ``study_sessions`` – :class:`StudySession`, one timed study/focus session,
+  optionally linked to a task.
 
 Money is stored as an integer number of minor units (cents/kuruş) in
 ``amount_cents``. Integers make SQL ``SUM`` exact and sidestep SQLite's lack of
@@ -29,6 +31,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Enum,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -36,7 +39,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.engine import Dialect
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.database import Base
@@ -308,3 +311,70 @@ class FinancialLog(Base):
             f"<FinancialLog id={self.id} {self.kind} {self.amount} {self.currency} "
             f"on={self.occurred_on} {status} category={self.category!r}>"
         )
+
+
+class StudySession(Base):
+    """One timed study (focus) session.
+
+    Business rules (enforced in :mod:`app.crud`):
+        * At most one session is *running* (``ended_at IS NULL``) at a time;
+          starting a new session stops the running one first.
+        * ``ended_at`` is after ``started_at`` and a session lasts at most
+          24 hours.
+        * ``planned_minutes`` is an optional target (Pomodoro); the client
+          stops the session when it is reached. The recorded duration is
+          always the real one (``ended_at - started_at``).
+        * ``task_id`` optionally links the session to a task. Deleting the
+          task keeps the session and just clears the link
+          (``ON DELETE SET NULL``).
+
+    New tables need no migration step: :func:`app.migrations.run_migrations`
+    calls ``create_all`` on every startup, which creates missing tables.
+    """
+
+    __tablename__ = "study_sessions"
+    __table_args__ = (
+        CheckConstraint("ended_at IS NULL OR ended_at > started_at", name="ck_study_sessions_order"),
+        CheckConstraint(
+            "planned_minutes IS NULL OR planned_minutes BETWEEN 1 AND 600",
+            name="ck_study_sessions_planned_range",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    subject: Mapped[str] = mapped_column(String(80), nullable=False)
+    task_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    started_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, index=True)
+    ended_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True, index=True)
+    planned_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow, index=True
+    )
+
+    #: Linked task (loaded with the session so the title can be shown).
+    task: Mapped[TaskItem | None] = relationship(TaskItem, lazy="joined")
+
+    @property
+    def is_running(self) -> bool:
+        """``True`` while the session has not been stopped."""
+        return self.ended_at is None
+
+    @property
+    def duration_seconds(self) -> int | None:
+        """Whole seconds from start to end, or ``None`` while running."""
+        if self.ended_at is None:
+            return None
+        return int((self.ended_at - self.started_at).total_seconds())
+
+    @property
+    def task_title(self) -> str | None:
+        """Title of the linked task, if any."""
+        return self.task.title if self.task is not None else None
+
+    def __repr__(self) -> str:
+        state = "running" if self.is_running else f"{self.duration_seconds}s"
+        return f"<StudySession id={self.id} subject={self.subject!r} {state}>"

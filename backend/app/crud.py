@@ -10,7 +10,8 @@ aggregation, calendar bucketing). Functions take an explicit
 import calendar as pycalendar
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -20,12 +21,20 @@ from app.models import (
     MAX_TASK_SPAN_DAYS,
     FinanceKind,
     FinancialLog,
+    StudySession,
     TaskItem,
     TaskScope,
     TaskStatus,
     cents_to_decimal,
     utcnow,
 )
+
+
+class StudySessionError(ValueError):
+    """Raised for invalid study-session operations (bad range, unknown task).
+
+    Routers translate this into ``422 Unprocessable Content``.
+    """
 
 
 class TaskDateRangeError(ValueError):
@@ -568,4 +577,206 @@ def build_calendar(db: Session, start: date, end: date) -> schemas.CalendarRespo
             open_task_count=len(tasks) - completed_tasks,
             completed_task_count=completed_tasks,
         ),
+    )
+
+
+# ===========================================================================
+# Study sessions (timer)
+# ===========================================================================
+
+#: Longest allowed session, matching the schema validation.
+_MAX_SESSION = timedelta(hours=schemas.MAX_STUDY_SESSION_HOURS)
+
+
+def _check_task_exists(db: Session, task_id: int | None) -> None:
+    """Raise :class:`StudySessionError` if ``task_id`` does not refer to a task."""
+    if task_id is not None and db.get(TaskItem, task_id) is None:
+        raise StudySessionError(f"Task {task_id} does not exist")
+
+
+def _check_session_range(started_at: datetime, ended_at: datetime | None) -> None:
+    """Validate a session's time range (end after start, at most 24 hours)."""
+    if ended_at is None:
+        return
+    if ended_at <= started_at:
+        raise StudySessionError("ended_at must be after started_at")
+    if ended_at - started_at > _MAX_SESSION:
+        raise StudySessionError(f"A session can last at most {schemas.MAX_STUDY_SESSION_HOURS} hours")
+
+
+def get_active_study_session(db: Session) -> StudySession | None:
+    """Return the running session (``ended_at IS NULL``), if any."""
+    return db.scalars(
+        select(StudySession).where(StudySession.ended_at.is_(None)).order_by(StudySession.started_at.desc())
+    ).first()
+
+
+def _close(session: StudySession, now: datetime) -> None:
+    """Stop a running session at ``now``, capped at the 24-hour maximum.
+
+    A session left running far too long (e.g. a forgotten timer over a
+    weekend) is closed at ``started_at + 24h`` rather than recording an
+    impossible duration. A stop within the same second as the start is
+    bumped to one second so ``ended_at > started_at`` always holds.
+    """
+    end = min(now, session.started_at + _MAX_SESSION)
+    if end <= session.started_at:
+        end = session.started_at + timedelta(seconds=1)
+    session.ended_at = end
+
+
+def start_study_session(db: Session, payload: schemas.StudyStart) -> StudySession:
+    """Start a new session now, stopping any running one first.
+
+    Raises:
+        StudySessionError: If ``task_id`` refers to a missing task.
+    """
+    _check_task_exists(db, payload.task_id)
+    now = utcnow()
+    running = get_active_study_session(db)
+    if running is not None:
+        _close(running, now)
+    session = StudySession(**payload.model_dump(), started_at=now)
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+def stop_study_session(db: Session) -> StudySession | None:
+    """Stop the running session now. Returns ``None`` if nothing was running."""
+    running = get_active_study_session(db)
+    if running is None:
+        return None
+    _close(running, utcnow())
+    db.commit()
+    db.refresh(running)
+    return running
+
+
+def list_study_sessions(
+    db: Session,
+    *,
+    start: datetime | None = None,
+    end: datetime | None = None,
+    task_id: int | None = None,
+) -> Sequence[StudySession]:
+    """Sessions that *started* in ``[start, end)``, newest first.
+
+    Args:
+        db: Active session.
+        start: Inclusive lower bound on ``started_at`` (timezone-aware).
+        end: Exclusive upper bound on ``started_at`` (timezone-aware).
+        task_id: Only sessions linked to this task.
+    """
+    stmt = select(StudySession)
+    if start is not None:
+        stmt = stmt.where(StudySession.started_at >= start)
+    if end is not None:
+        stmt = stmt.where(StudySession.started_at < end)
+    if task_id is not None:
+        stmt = stmt.where(StudySession.task_id == task_id)
+    return db.scalars(stmt.order_by(StudySession.started_at.desc(), StudySession.id.desc())).unique().all()
+
+
+def get_study_session(db: Session, session_id: int) -> StudySession | None:
+    """Return a session by id, or ``None``."""
+    return db.get(StudySession, session_id)
+
+
+def create_study_session(db: Session, payload: schemas.StudySessionCreate) -> StudySession:
+    """Log a completed session by hand (e.g. study done away from the computer).
+
+    Raises:
+        StudySessionError: If ``task_id`` refers to a missing task.
+    """
+    _check_task_exists(db, payload.task_id)
+    session = StudySession(**payload.model_dump())
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+def update_study_session(
+    db: Session, session: StudySession, payload: schemas.StudySessionUpdate
+) -> StudySession:
+    """Apply a partial update, validating the resulting time range first.
+
+    Raises:
+        StudySessionError: For an invalid range, an end time on a running
+            session that is in the future, or a missing task.
+    """
+    changes = payload.model_dump(exclude_unset=True)
+    if "task_id" in changes:
+        _check_task_exists(db, changes["task_id"])
+    started_at = changes.get("started_at", session.started_at)
+    ended_at = changes.get("ended_at", session.ended_at)
+    if ended_at is None and started_at > utcnow():
+        raise StudySessionError("A running session cannot start in the future")
+    if ended_at is not None and ended_at > utcnow() + timedelta(minutes=1):
+        raise StudySessionError("ended_at cannot be in the future")
+    _check_session_range(started_at, ended_at)
+    for field_name, value in changes.items():
+        setattr(session, field_name, value)
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+def delete_study_session(db: Session, session: StudySession) -> None:
+    """Permanently remove a session."""
+    db.delete(session)
+    db.commit()
+
+
+def study_summary(db: Session, start: date, end: date, tz_name: str) -> schemas.StudySummary:
+    """Totals per local day and per subject for ``[start, end]`` in ``tz_name``.
+
+    The range's local midnights are converted to UTC for the query; each
+    completed session is credited to the local day it started on. The running
+    session is excluded from the totals and returned as ``active`` so the
+    client can tick its elapsed time live.
+
+    Raises:
+        StudySessionError: For an unknown time zone or an inverted range.
+    """
+    try:
+        tz = ZoneInfo(tz_name)
+    except (KeyError, ValueError) as error:
+        raise StudySessionError(f"Unknown time zone: {tz_name}") from error
+    if end < start:
+        raise StudySessionError("'end' must be on or after 'start'")
+
+    range_start = datetime.combine(start, time.min, tzinfo=tz).astimezone(UTC)
+    range_end = datetime.combine(end + timedelta(days=1), time.min, tzinfo=tz).astimezone(UTC)
+    sessions = list_study_sessions(db, start=range_start, end=range_end)
+
+    day_seconds = {start + timedelta(days=offset): [0, 0] for offset in range((end - start).days + 1)}
+    subject_seconds: dict[str, list[int]] = {}
+    for session in sessions:
+        seconds = session.duration_seconds
+        if seconds is None:
+            continue  # Running: reported separately as `active`.
+        local_day = session.started_at.astimezone(tz).date()
+        if local_day in day_seconds:
+            day_seconds[local_day][0] += seconds
+            day_seconds[local_day][1] += 1
+        bucket = subject_seconds.setdefault(session.subject, [0, 0])
+        bucket[0] += seconds
+        bucket[1] += 1
+
+    active = get_active_study_session(db)
+    return schemas.StudySummary(
+        start=start,
+        end=end,
+        tz=tz_name,
+        total_seconds=sum(value[0] for value in day_seconds.values()),
+        session_count=sum(value[1] for value in day_seconds.values()),
+        days=[schemas.StudyDay(date=day, seconds=v[0], session_count=v[1]) for day, v in day_seconds.items()],
+        by_subject=[
+            schemas.StudySubjectTotal(subject=subject, seconds=v[0], session_count=v[1])
+            for subject, v in sorted(subject_seconds.items(), key=lambda item: (-item[1][0], item[0]))
+        ],
+        active=schemas.StudySessionRead.model_validate(active) if active is not None else None,
     )

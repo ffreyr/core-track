@@ -11,12 +11,14 @@
 
 import { calendarApi, healthApi } from "./calendar";
 import { financeApi } from "./finance";
+import { studyApi } from "./study";
 import { tasksApi } from "./tasks";
 
 export const api = {
   tasks: tasksApi,
   finance: financeApi,
   calendar: calendarApi,
+  study: studyApi,
   health: healthApi,
 };
 

@@ -240,6 +240,83 @@ body.widget-body #root {
   font-weight: 800;
 }
 
+/* ---- Study timer strip ---- */
+
+.widget__study {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 38px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--widget-line);
+  border-radius: 12px;
+  background: var(--widget-card);
+}
+
+.widget:not(.is-native) .widget__study {
+  background: var(--surface-2);
+}
+
+.widget__study.is-running {
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.widget__study-icon {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.widget__study-text {
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.widget__study.is-running .widget__study-text {
+  color: var(--text);
+}
+
+.widget__study-clock {
+  font-family: var(--font-rounded);
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.widget__study.is-running .widget__study-clock {
+  color: var(--accent);
+}
+
+.widget__study-button {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0 0 0 1px;
+  border: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-text);
+  cursor: pointer;
+}
+
+.widget__study-button svg {
+  fill: currentColor;
+}
+
+.widget__study-button.is-stop {
+  padding: 0;
+  background: var(--negative);
+  color: #fff;
+}
+
 /* ---- Budget card ---- */
 
 .widget__budget {

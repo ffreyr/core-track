@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Core-Track backend as a per-user LaunchAgent.
+
+  Starts the FastAPI backend when you log in, keeps it running in the
+  background (restarting it if it ever exits), and needs no terminal.
+
+  - Uses the project's virtual environment (.venv/bin/uvicorn).
+  - Listens on 0.0.0.0:8000 so the iPhone app can reach it over Wi-Fi.
+  - No reload watcher: this is the "production" way to run it.
+  - Logs go to ~/Library/Logs/core-track-backend.log (viewable in Console.app).
+
+  Install: copy to ~/Library/LaunchAgents/ and bootstrap with launchctl
+  (see deploy/macos/README.md).
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.coretrack.backend</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/ardakaya/Documents/core-track/backend/.venv/bin/uvicorn</string>
+        <string>app.main:app</string>
+        <string>--host</string>
+        <string>0.0.0.0</string>
+        <string>--port</string>
+        <string>8000</string>
+        <string>--log-level</string>
+        <string>info</string>
+    </array>
+
+    <!-- uvicorn must start inside backend/ so `app.main` and .env resolve. -->
+    <key>WorkingDirectory</key>
+    <string>/Users/ardakaya/Documents/core-track/backend</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/ardakaya/Documents/core-track/backend/.venv/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <!-- Flush log lines immediately instead of buffering them. -->
+        <key>PYTHONUNBUFFERED</key>
+        <string>1</string>
+    </dict>
+
+    <!-- Start at login, and restart automatically if the process exits. -->
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <!-- Wait at least 10 s between restarts (avoids a tight crash loop). -->
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <!-- Background job: low scheduling priority, no UI. -->
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>StandardOutPath</key>
+    <string>/Users/ardakaya/Library/Logs/core-track-backend.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/ardakaya/Library/Logs/core-track-backend.log</string>
+</dict>
+</plist>

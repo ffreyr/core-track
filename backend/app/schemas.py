@@ -20,7 +20,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Annotated, ClassVar, Self
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, PlainSerializer, model_validator
 
 from app.models import MAX_TASK_SPAN_DAYS, FinanceKind, TaskScope, TaskStatus
 
@@ -352,6 +352,130 @@ class CalendarResponse(BaseModel):
     end: date
     days: list[CalendarDay]
     totals: CalendarTotals
+
+
+# ---------------------------------------------------------------------------
+# Study sessions (timer)
+# ---------------------------------------------------------------------------
+
+#: Subject / label of a study session, e.g. "Mathematics".
+StudySubject = Annotated[str, Field(min_length=1, max_length=80)]
+
+#: Optional Pomodoro target in minutes.
+PlannedMinutes = Annotated[int, Field(ge=1, le=600)]
+
+#: Longest allowed session.
+MAX_STUDY_SESSION_HOURS = 24
+
+
+class StudyStart(_InputModel):
+    """Body of ``POST /api/study/start``.
+
+    Starting a session stops any session that is still running.
+    ``planned_minutes`` turns the session into a countdown (Pomodoro).
+    """
+
+    subject: StudySubject = "Study"
+    task_id: int | None = None
+    planned_minutes: PlannedMinutes | None = None
+    note: LongText | None = None
+
+
+class StudySessionCreate(_InputModel):
+    """Body of ``POST /api/study/sessions``: log a past session by hand.
+
+    Timestamps must include a timezone offset (e.g. ``2026-10-08T14:00:00+03:00``).
+    """
+
+    subject: StudySubject
+    task_id: int | None = None
+    started_at: AwareDatetime
+    ended_at: AwareDatetime
+    note: LongText | None = None
+
+    @model_validator(mode="after")
+    def _validate_range(self) -> Self:
+        """``ended_at`` after ``started_at``, at most 24 hours apart."""
+        if self.ended_at <= self.started_at:
+            raise ValueError("ended_at must be after started_at")
+        if (self.ended_at - self.started_at).total_seconds() > MAX_STUDY_SESSION_HOURS * 3600:
+            raise ValueError(f"A session can last at most {MAX_STUDY_SESSION_HOURS} hours")
+        return self
+
+
+class StudySessionUpdate(_PatchModel):
+    """Partial update of a session (subject, task link, times, note).
+
+    ``ended_at`` cannot be cleared (use ``POST /api/study/start`` to run a new
+    session). The resulting time range is validated in :mod:`app.crud`.
+    """
+
+    NON_NULLABLE: ClassVar[frozenset[str]] = frozenset({"subject", "started_at", "ended_at"})
+
+    subject: StudySubject | None = None
+    task_id: int | None = None
+    started_at: AwareDatetime | None = None
+    ended_at: AwareDatetime | None = None
+    planned_minutes: PlannedMinutes | None = None
+    note: LongText | None = None
+
+
+class StudySessionRead(BaseModel):
+    """A study session as returned by the API.
+
+    ``duration_seconds`` is ``null`` while the session is running; clients
+    compute the live elapsed time from ``started_at``.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    subject: str
+    task_id: int | None
+    task_title: str | None
+    started_at: datetime
+    ended_at: datetime | None
+    is_running: bool
+    duration_seconds: int | None
+    planned_minutes: int | None
+    note: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class StudyDay(BaseModel):
+    """Completed study time on one local calendar day."""
+
+    date: date
+    seconds: int
+    session_count: int
+
+
+class StudySubjectTotal(BaseModel):
+    """Completed study time for one subject within the summary range."""
+
+    subject: str
+    seconds: int
+    session_count: int
+
+
+class StudySummary(BaseModel):
+    """Study totals for a range of local days (``GET /api/study/summary``).
+
+    Sessions count toward the local day (in ``tz``) on which they *started*.
+    Only completed sessions are summed; the running session, if any, is
+    returned in ``active`` so clients can add its live elapsed time.
+    ``days`` contains every day of the range, zero-filled.
+    """
+
+    start: date
+    end: date
+    tz: str
+    total_seconds: int
+    session_count: int
+    days: list[StudyDay]
+    by_subject: list[StudySubjectTotal]
+    active: StudySessionRead | None
 
 
 # ---------------------------------------------------------------------------

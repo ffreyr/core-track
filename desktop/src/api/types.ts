@@ -227,6 +227,87 @@ export interface CalendarResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Study timer
+// ---------------------------------------------------------------------------
+
+/**
+ * One timed study session. `ended_at`/`duration_seconds` are `null` while
+ * it is running; compute live elapsed time from `started_at`.
+ */
+export interface StudySession {
+  id: number;
+  subject: string;
+  task_id: number | null;
+  task_title: string | null;
+  started_at: IsoDateTime;
+  ended_at: IsoDateTime | null;
+  is_running: boolean;
+  duration_seconds: number | null;
+  /** Pomodoro target in minutes, or `null` for a stopwatch session. */
+  planned_minutes: number | null;
+  note: string | null;
+  created_at: IsoDateTime;
+  updated_at: IsoDateTime;
+}
+
+/** Body of `POST /api/study/start` (stops any running session first). */
+export type StudyStart = {
+  subject?: string;
+  task_id?: number | null;
+  planned_minutes?: number | null;
+  note?: string | null;
+};
+
+/** Body of `POST /api/study/sessions`: a past session logged by hand. */
+export type StudySessionCreate = {
+  subject: string;
+  task_id?: number | null;
+  /** ISO datetime *with* offset, e.g. `2026-10-08T14:00:00+03:00`. */
+  started_at: IsoDateTime;
+  ended_at: IsoDateTime;
+  note?: string | null;
+};
+
+/** Body of `PATCH /api/study/sessions/{id}`. */
+export type StudySessionUpdate = Partial<StudySessionCreate> & { planned_minutes?: number | null };
+
+/** Query filters for `GET /api/study/sessions` (bounds on `started_at`). */
+export type StudySessionListParams = {
+  start?: IsoDateTime;
+  end?: IsoDateTime;
+  task_id?: number;
+};
+
+/** Completed study time on one local day. */
+export interface StudyDay {
+  date: IsoDate;
+  seconds: number;
+  session_count: number;
+}
+
+/** Completed study time per subject. */
+export interface StudySubjectTotal {
+  subject: string;
+  seconds: number;
+  session_count: number;
+}
+
+/**
+ * Response of `GET /api/study/summary`. Totals include completed sessions
+ * only; the running one is in `active` so clients can add live time.
+ */
+export interface StudySummary {
+  start: IsoDate;
+  end: IsoDate;
+  tz: string;
+  total_seconds: number;
+  session_count: number;
+  days: StudyDay[];
+  by_subject: StudySubjectTotal[];
+  active: StudySession | null;
+}
+
+// ---------------------------------------------------------------------------
 // Meta
 // ---------------------------------------------------------------------------
 

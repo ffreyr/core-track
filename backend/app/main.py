@@ -19,7 +19,7 @@ from app import schemas
 from app.config import get_settings
 from app.database import init_db
 from app.models import utcnow
-from app.routers import calendar, finance, tasks
+from app.routers import calendar, finance, study, tasks
 
 
 @asynccontextmanager
@@ -63,6 +63,7 @@ def create_app() -> FastAPI:
     app.include_router(tasks.router, prefix=settings.api_prefix)
     app.include_router(finance.router, prefix=settings.api_prefix)
     app.include_router(calendar.router, prefix=settings.api_prefix)
+    app.include_router(study.router, prefix=settings.api_prefix)
 
     @app.get(f"{settings.api_prefix}/health", response_model=schemas.HealthResponse, tags=["meta"])
     def health() -> schemas.HealthResponse:

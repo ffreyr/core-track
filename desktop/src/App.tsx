@@ -17,6 +17,7 @@ import { CalendarView } from "./features/calendar/CalendarView";
 import { EditorsProvider } from "./features/editors/EditorsProvider";
 import { FinanceView } from "./features/finance/FinanceView";
 import { SettingsView } from "./features/settings/SettingsView";
+import { StudyView } from "./features/study/StudyView";
 import { Sidebar, type Tab } from "./features/shell/Sidebar";
 import { TasksBoard } from "./features/tasks/TasksBoard";
 import { useLocalStorage } from "./hooks/useLocalStorage";
@@ -26,7 +27,7 @@ import { PreferencesProvider, usePreferences } from "./state/preferences";
 import { DataSyncProvider } from "./state/sync";
 import { ToastProvider } from "./state/toasts";
 
-const TABS: readonly Tab[] = ["calendar", "tasks", "finance", "settings"];
+const TABS: readonly Tab[] = ["calendar", "tasks", "finance", "study", "settings"];
 
 /** Sanitise the remembered tab (guards against stale/invalid stored values). */
 function sanitizeTab(stored: unknown): Tab {
@@ -78,6 +79,7 @@ function Shell() {
         {tab === "finance" ? (
           <FinanceView anchor={anchor} onAnchorChange={setAnchor} onOpenDay={openDayInCalendar} />
         ) : null}
+        {tab === "study" ? <StudyView /> : null}
         {tab === "settings" ? <SettingsView /> : null}
       </main>
     </div>

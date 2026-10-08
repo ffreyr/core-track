@@ -33,10 +33,12 @@ import { api, type Task } from "../api";
 import { ProgressRing, RoundCheck, StatusAction } from "../components/glance";
 import { Icon } from "../components/Icon";
 import { useApiAction } from "../hooks/useApi";
+import { useStudyTimer } from "../hooks/useStudyTimer";
 import { useTodaySnapshot } from "../hooks/useTodaySnapshot";
 import { diffInDays, formatShortDay, parseIsoDate } from "../lib/dates";
 import { hideCurrentWindow, inDesktopApp, openMainWindow } from "../lib/desktopBridge";
 import { SCOPE_META } from "../lib/labels";
+import { formatClock, formatDuration } from "../lib/duration";
 import { formatMoney } from "../lib/money";
 import { usePreferences } from "../state/preferences";
 import { useSyncStatus } from "../state/sync";
@@ -57,6 +59,7 @@ export function WidgetApp() {
   const run = useApiAction();
   const status = useSyncStatus();
   const snapshot = useTodaySnapshot();
+  const timer = useStudyTimer();
   const { tasks, doneCount, summary, nextDue, overdueCount, health, todayDate, todayIso } = snapshot;
   const currency = preferences.defaultCurrency;
   const offline = status.state === "offline";
@@ -150,6 +153,37 @@ export function WidgetApp() {
               );
             })}
           </ul>
+        )}
+      </section>
+
+      {/* Study timer strip: live clock + stop while running, today's total + start when idle. */}
+      <section className={timer.active ? "widget__study is-running" : "widget__study"} aria-label="Study timer">
+        <span className="widget__study-icon" aria-hidden="true">
+          <Icon name="timer" size={15} />
+        </span>
+        {timer.active ? (
+          <>
+            <span className="widget__study-text">{timer.active.subject}</span>
+            <span className="widget__study-clock">
+              {formatClock(timer.remaining !== null ? Math.max(0, timer.remaining) : timer.elapsed)}
+            </span>
+            <button type="button" className="widget__study-button is-stop" onClick={() => void timer.stop()} title="Stop the timer">
+              <Icon name="stop" size={11} />
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="widget__study-text">Studied today</span>
+            <span className="widget__study-clock">{formatDuration(timer.todaySeconds)}</span>
+            <button
+              type="button"
+              className="widget__study-button"
+              onClick={() => void timer.start({ subject: timer.recentSubjects[0] ?? "Study" })}
+              title={`Start studying ${timer.recentSubjects[0] ?? ""}`.trim()}
+            >
+              <Icon name="play" size={11} />
+            </button>
+          </>
         )}
       </section>
 

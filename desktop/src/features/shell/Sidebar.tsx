@@ -11,19 +11,22 @@ import packageJson from "../../../package.json";
 import logoUrl from "../../assets/logo.png";
 import { ProgressRing } from "../../components/glance";
 import { Icon, type IconName } from "../../components/Icon";
+import { useStudyTimer } from "../../hooks/useStudyTimer";
 import { useTodaySnapshot } from "../../hooks/useTodaySnapshot";
 import { formatShortDay, parseIsoDate } from "../../lib/dates";
+import { formatClock } from "../../lib/duration";
 import { formatMoney } from "../../lib/money";
 import { usePreferences } from "../../state/preferences";
 import { useSyncStatus } from "../../state/sync";
 
-export type Tab = "calendar" | "tasks" | "finance" | "settings";
+export type Tab = "calendar" | "tasks" | "finance" | "study" | "settings";
 
 /** Primary destinations; Settings lives in the footer. */
 const NAV_ITEMS: readonly { id: Exclude<Tab, "settings">; label: string; icon: IconName }[] = [
   { id: "calendar", label: "Calendar", icon: "calendar" },
   { id: "tasks", label: "Tasks", icon: "tasks" },
   { id: "finance", label: "Finance", icon: "wallet" },
+  { id: "study", label: "Study", icon: "timer" },
 ];
 
 const HEALTH_LABEL = { "on-track": "On track", tight: "Tight", over: "Over budget" } as const;
@@ -99,6 +102,12 @@ function ConnectionIndicator() {
 }
 
 export function Sidebar({ tab, onTabChange, nativeTitleBar, onOpenToday }: SidebarProps) {
+  // Live study timer: shown as a ticking badge on the Study item while running.
+  const timer = useStudyTimer();
+  const timerBadge = timer.active
+    ? formatClock(timer.remaining !== null ? Math.max(0, timer.remaining) : timer.elapsed)
+    : null;
+
   return (
     <nav className={nativeTitleBar ? "sidebar has-native-titlebar" : "sidebar"} aria-label="Main">
       {/* Empty strip under the traffic lights doubles as a drag handle. */}
@@ -127,6 +136,11 @@ export function Sidebar({ tab, onTabChange, nativeTitleBar, onOpenToday }: Sideb
             >
               <Icon name={item.icon} size={18} />
               {item.label}
+              {item.id === "study" && timerBadge ? (
+                <span className="sidebar__timer-badge" title={`Studying ${timer.active?.subject ?? ""}`}>
+                  {timerBadge}
+                </span>
+              ) : null}
             </button>
           </li>
         ))}

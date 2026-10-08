@@ -20,6 +20,8 @@ const PATHS = {
   arrowDown: "M12 5v14M19 12l-7 7-7-7",
   play: "M7 4.5v15l12-7.5z",
   pause: "M8 5v14M16 5v14",
+  timer: "M10 2h4M12 14l3-3M12 22a8 8 0 1 0 0-16 8 8 0 0 0 0 16z",
+  stop: "M6 6h12v12H6z",
 } as const;
 
 export type IconName = keyof typeof PATHS;
