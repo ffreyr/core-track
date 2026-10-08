@@ -51,6 +51,7 @@ import {
   windowEnd,
   type WeekWindow,
 } from "./layout";
+import { applyResizePreview } from "./resize";
 import { useCalendarInteractions } from "./useCalendarInteractions";
 
 interface ScrollingCalendarProps {
@@ -67,7 +68,8 @@ const ROWS_PER_SCREEN = { month: 5, twoWeeks: 2 } as const;
 export function ScrollingCalendar({ viewMode, anchor, onAnchorChange, selectedIso, onSelectIso }: ScrollingCalendarProps) {
   const { preferences } = usePreferences();
   const { weekStartsOn } = preferences;
-  const { handlers, dropTargetIso, toggleTask } = useCalendarInteractions(onSelectIso);
+  const { handlers, dropTargetIso, toggleTask, resizePreview, acknowledgeData } =
+    useCalendarInteractions(onSelectIso);
 
   // ---- Window, jump requests and viewport ---------------------------------
 
@@ -154,6 +156,13 @@ export function ScrollingCalendar({ viewMode, anchor, onAnchorChange, selectedIs
   // ---- Data ---------------------------------------------------------------
 
   const data = useCalendarData(toIsoDate(weekWindow.start), toIsoDate(windowEnd(weekWindow)));
+
+  // Live drag-to-resize preview drawn over the loaded data (see resize.ts),
+  // released once fresh data arrives after a successful commit.
+  const dayMap = useMemo(() => applyResizePreview(data.days, resizePreview), [data.days, resizePreview]);
+  useEffect(() => {
+    acknowledgeData();
+  }, [data.days, acknowledgeData]);
   const totals = useMemo(
     () =>
       summarizeDays(eachDay(parseIsoDate(totalsStartIso), parseIsoDate(totalsEndIso)).map((day) => data.days.get(toIsoDate(day)))),
@@ -209,7 +218,7 @@ export function ScrollingCalendar({ viewMode, anchor, onAnchorChange, selectedIs
         rows={rows}
         columns={weekColumns(preferences.showWeekends)}
         weekdayHeader
-        dayMap={data.days}
+        dayMap={dayMap}
         preferences={preferences}
         todayIso={toIsoDate(today())}
         selectedIso={selectedIso}

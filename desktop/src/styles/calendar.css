@@ -571,3 +571,57 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ---- Drag-to-resize ---------------------------------------------------- */
+
+/* Task chips host an absolutely positioned resize handle. */
+.chip--task {
+  position: relative;
+}
+
+/*
+ * Invisible 9px hit area on the right edge of task chips and bars. A grip
+ * line fades in on hover so the affordance is discoverable without adding
+ * visual noise to every item.
+ */
+.resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 9px;
+  border-radius: 0 5px 5px 0;
+  cursor: ew-resize;
+  touch-action: none; /* Keep pointer events flowing on touch/trackpad. */
+}
+
+.resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 3px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: currentColor;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.chip--task:hover .resize-handle::after,
+.task-bar:hover .resize-handle::after {
+  opacity: 0.55;
+}
+
+.resize-handle:hover::after {
+  opacity: 0.9 !important;
+}
+
+/* While resizing: resize cursor everywhere and no accidental text selection. */
+body.is-resizing-task,
+body.is-resizing-task * {
+  cursor: ew-resize !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}

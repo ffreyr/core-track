@@ -15,6 +15,7 @@ import { usePreferences } from "../../state/preferences";
 import { CalendarFrame } from "./CalendarFrame";
 import { CalendarGrid } from "./CalendarGrid";
 import { computePagedLayout, shiftPagedAnchor } from "./layout";
+import { applyResizePreview } from "./resize";
 import { useCalendarInteractions } from "./useCalendarInteractions";
 
 interface PagedCalendarProps {
@@ -27,12 +28,20 @@ interface PagedCalendarProps {
 
 export function PagedCalendar({ viewMode, anchor, onAnchorChange, selectedIso, onSelectIso }: PagedCalendarProps) {
   const { preferences } = usePreferences();
-  const { handlers, dropTargetIso, toggleTask } = useCalendarInteractions(onSelectIso);
+  const { handlers, dropTargetIso, toggleTask, resizePreview, acknowledgeData } =
+    useCalendarInteractions(onSelectIso);
 
   const layout = useMemo(() => computePagedLayout(viewMode, anchor, preferences), [viewMode, anchor, preferences]);
   const startIso = toIsoDate(layout.rangeStart);
   const endIso = toIsoDate(layout.rangeEnd);
   const data = useCalendarData(startIso, endIso);
+
+  // Live drag-to-resize preview drawn over the loaded data (see resize.ts),
+  // released once fresh data arrives after a successful commit.
+  const dayMap = useMemo(() => applyResizePreview(data.days, resizePreview), [data.days, resizePreview]);
+  useEffect(() => {
+    acknowledgeData();
+  }, [data.days, acknowledgeData]);
 
   const totals = useMemo(
     () => summarizeDays(eachDay(layout.rangeStart, layout.rangeEnd).map((day) => data.days.get(toIsoDate(day)))),
@@ -73,7 +82,7 @@ export function PagedCalendar({ viewMode, anchor, onAnchorChange, selectedIso, o
         rows={layout.rows}
         columns={layout.columns}
         weekdayHeader={layout.weekAligned}
-        dayMap={data.days}
+        dayMap={dayMap}
         preferences={preferences}
         todayIso={toIsoDate(today())}
         selectedIso={selectedIso}

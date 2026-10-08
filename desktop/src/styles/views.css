@@ -1,5 +1,5 @@
 /*
- * Tasks board, Finance tab (cash-flow projection) and Settings tab.
+ * Tasks board, Finance tab (multi-month cash-flow sheet) and Settings tab.
  */
 
 .tasks-board,
@@ -76,479 +76,431 @@
   transition: width 0.3s ease;
 }
 
-/* ---- Finance: layout --------------------------------------------------- */
+/* ---- Finance: cash-flow sheet ------------------------------------------ */
+/*
+ * Fixed row heights are used for the sticky header and footer offsets below
+ * (summary labels are single-line and truncated so rows never grow):
+ *   month header row 40px, income/expense header row 32px,
+ *   summary rows 36px each, remaining row 48px.
+ */
 
-.finance-scroll,
-.settings-scroll {
+.finance-sheet-area {
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 14px;
+  gap: 8px;
   min-height: 0;
-  padding: 16px 18px 28px;
-  overflow-y: auto;
+  padding: 14px 18px 12px;
 }
 
-.settings-scroll {
-  max-width: 780px;
+.sheet-loading {
+  padding: 20px 0;
 }
 
-.finance-columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 14px;
-  align-items: start;
-}
-
-.finance-columns__main,
-.finance-columns__side {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  min-width: 0;
-}
-
-/* ---- Finance: remaining budget hero ------------------------------------ */
-
-.budget-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px 24px;
-  padding: 20px 22px;
-  border: 1px solid var(--border);
-  border-left: 5px solid var(--positive);
-  border-radius: var(--radius);
+/* The scroll container: scrolls both ways; header/labels/footer stay pinned. */
+.sheet-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
   background: var(--surface);
+  transition: opacity 0.15s;
 }
 
-.budget-hero.is-overspent {
-  border-left-color: var(--negative);
+.sheet-scroll.is-stale {
+  opacity: 0.6;
 }
 
-.budget-hero--placeholder {
-  min-height: 170px;
-  border-left-color: var(--border);
-}
-
-.budget-hero__main,
-.budget-hero__side {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.budget-hero__side {
-  align-items: flex-end;
-  text-align: right;
-}
-
-.budget-hero__side strong {
-  font-size: 20px;
+.sheet {
+  /* `separate` (not `collapse`) so sticky cells keep their borders. */
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  min-width: 100%;
   font-variant-numeric: tabular-nums;
 }
 
-.budget-hero__label {
-  font-size: 12px;
+.sheet__month-col {
+  width: 230px;
+}
+
+/* Every cell: spreadsheet grid lines. */
+.sheet th,
+.sheet td {
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* A heavier line separates one month from the next. */
+.sheet__month,
+.sheet__kind--expense,
+.sheet-cell--expense,
+.sheet-sum--expense,
+.sheet-remaining {
+  border-right: 2px solid var(--border-strong) !important;
+}
+
+/* ---- Header rows (sticky to the top) ---- */
+
+.sheet thead th {
+  position: sticky;
+  z-index: 2;
+}
+
+.sheet__month-row th {
+  top: 0;
+  height: 40px;
+}
+
+.sheet__kind-row th {
+  top: 40px;
+  height: 32px;
+}
+
+.sheet__month {
+  padding: 0 12px;
+  background: var(--surface-2) !important;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.sheet__month.is-current {
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface)) !important;
+  color: var(--accent);
+}
+
+.sheet__badge {
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-faint);
+  letter-spacing: 0.04em;
+  vertical-align: 2px;
 }
 
-.budget-hero__value {
-  font-size: 36px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-  color: var(--positive);
-}
-
-.budget-hero.is-overspent .budget-hero__value {
-  color: var(--negative);
-}
-
-.budget-hero__explain,
-.budget-hero__hint {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-.budget-hero__warning {
-  margin: 4px 0 0;
-  color: var(--negative);
-  font-weight: 600;
-}
-
-.budget-bar {
-  grid-column: 1 / -1;
-}
-
-.budget-bar__track {
-  position: relative;
-  display: flex;
-  height: 14px;
-  overflow: hidden;
-  border-radius: 7px;
-  background: var(--surface-2);
-}
-
-.budget-bar__segment {
-  height: 100%;
-  transition: width 0.35s ease;
-}
-
-.budget-bar__segment.is-paid,
-.legend-swatch.is-paid {
-  background: var(--negative);
-}
-
-.budget-bar__segment.is-pending,
-.legend-swatch.is-pending {
-  background: repeating-linear-gradient(
-    135deg,
-    var(--pending) 0 5px,
-    color-mix(in srgb, var(--pending) 45%, transparent) 5px 10px
-  );
-}
-
-.budget-bar__segment.is-remaining,
-.legend-swatch.is-remaining {
-  background: var(--positive);
-}
-
-.budget-bar__marker {
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  width: 3px;
-  margin-left: -1px;
-  background: var(--text);
-}
-
-.budget-bar__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  margin-top: 8px;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-.budget-bar__legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.budget-bar__share {
-  margin-left: auto;
-  font-weight: 600;
-}
-
-.legend-swatch {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border-radius: 3px;
-}
-
-/* ---- Finance: KPI cards ------------------------------------------------ */
-
-.summary-cards {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.summary-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.summary-card--pending {
-  border-color: color-mix(in srgb, var(--pending) 45%, var(--border));
-  background: color-mix(in srgb, var(--pending) 5%, var(--surface));
-}
-
-.summary-card strong {
-  font-size: 24px;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
-}
-
-.summary-card__hint {
-  color: var(--text-faint);
-  font-size: 12.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ---- Finance: balance chart -------------------------------------------- */
-
-.balance-chart {
-  margin: 0;
-}
-
-.balance-chart--placeholder {
-  height: 200px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-}
-
-.balance-chart__legend {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 8px;
-  color: var(--text-muted);
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-
-.balance-chart__legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-
-.legend-line {
-  display: inline-block;
-  width: 18px;
-  height: 0;
-  border-top: 2.5px solid var(--accent);
-}
-
-.legend-line.is-projected {
-  border-top-style: dashed;
-  border-top-color: var(--text-muted);
-}
-
-.balance-chart__svg {
-  display: block;
-  width: 100%;
-  height: 170px;
-}
-
-.balance-chart__zero {
-  stroke: var(--border-strong);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-.balance-chart__today {
-  stroke: var(--accent);
-  stroke-width: 1;
-  stroke-dasharray: 3 3;
-  vector-effect: non-scaling-stroke;
-}
-
-.balance-chart__line {
-  fill: none;
-  stroke-width: 2.5;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-}
-
-.balance-chart__line.is-actual {
-  stroke: var(--accent);
-}
-
-.balance-chart__line.is-projected {
-  stroke: var(--text-muted);
-  stroke-dasharray: 6 5;
-}
-
-.balance-chart__hit {
-  fill: transparent;
-  cursor: pointer;
-}
-
-.balance-chart__hit:hover {
-  fill: color-mix(in srgb, var(--accent) 8%, transparent);
-}
-
-.balance-chart__axis {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 6px;
-  color: var(--text-faint);
+.sheet__kind {
+  padding: 0 10px;
   font-size: 12px;
-}
-
-/* ---- Finance: ledger & tables ------------------------------------------ */
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.table th {
-  padding: 7px 8px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-faint);
-  font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   text-align: left;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
-.table td {
-  padding: 9px 8px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: middle;
+.sheet__kind--income {
+  background: color-mix(in srgb, var(--positive) 10%, var(--surface)) !important;
+  color: var(--positive);
 }
 
-.table__row--clickable {
+.sheet__kind--expense {
+  background: color-mix(in srgb, var(--negative) 9%, var(--surface)) !important;
+  color: var(--negative);
+}
+
+.sheet__tr {
+  font-weight: 500;
+  opacity: 0.75;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ---- Item cells ---- */
+
+.sheet-cell {
+  height: 38px;
+  padding: 0 8px;
+  overflow: hidden;
   cursor: pointer;
 }
 
-.table__row--clickable:hover td {
+.sheet-cell:hover:not(.is-empty):not(.sheet-cell--add) {
   background: var(--surface-hover);
 }
 
-.table__num {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-align: right !important;
-  white-space: nowrap;
+.sheet-cell.is-empty {
+  cursor: cell;
 }
 
-.table__muted {
-  color: var(--text-muted);
+.sheet-cell.is-pending {
+  background: color-mix(in srgb, var(--pending) 6%, var(--surface));
 }
 
-.ledger tr.is-pending td {
-  background: color-mix(in srgb, var(--pending) 6%, transparent);
-}
-
-.ledger tr.is-pending .table__num:not(:last-child) {
-  font-style: italic;
-}
-
-.ledger tr.is-overdue td {
+.sheet-cell.is-overdue {
   background: var(--negative-soft);
 }
 
-.ledger__category {
-  display: block;
-  font-weight: 500;
-}
-
-.ledger__note {
-  display: block;
-  color: var(--text-muted);
-  font-size: 12.5px;
-}
-
-.ledger__today td {
-  padding: 0;
-  border-bottom: 2px solid var(--accent);
-}
-
-.ledger__today span {
-  display: inline-block;
-  padding: 2px 10px;
-  border-radius: 6px 6px 0 0;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.status-toggle {
-  display: inline-flex;
+.sheet-item {
+  display: flex;
   align-items: center;
   gap: 7px;
-  color: var(--pending);
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
+  min-width: 0;
 }
 
-.status-toggle.is-paid {
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.status-toggle input {
+.sheet-item__check {
+  flex-shrink: 0;
   width: 15px;
   height: 15px;
   margin: 0;
   cursor: pointer;
 }
 
-/* ---- Finance: category split ------------------------------------------- */
-
-.breakdown ul {
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.breakdown__label {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  margin-bottom: 4px;
-}
-
-.breakdown__label strong {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-}
-
-.breakdown__count {
-  color: var(--text-faint);
-  font-size: 12px;
-}
-
-.breakdown__track {
-  display: flex;
-  height: 7px;
-  overflow: hidden;
+.sheet-item__day {
+  flex-shrink: 0;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface-2);
-}
-
-.breakdown__bar {
-  height: 100%;
-  transition: width 0.3s ease;
-}
-
-.breakdown__bar.is-income {
-  background: var(--positive);
-}
-
-.breakdown__bar.is-expense {
-  background: var(--negative);
-}
-
-.breakdown__bar.is-pending {
-  background: repeating-linear-gradient(
-    135deg,
-    var(--pending) 0 4px,
-    color-mix(in srgb, var(--pending) 45%, transparent) 4px 8px
-  );
-}
-
-.breakdown__pending {
-  display: block;
-  margin-top: 3px;
-  color: var(--pending);
+  color: var(--text-muted);
   font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sheet-item__day:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sheet-item__name {
+  flex: 1;
+  overflow: hidden;
+  min-width: 0;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-item__note {
+  margin-left: 6px;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.sheet-item__amount {
+  flex-shrink: 0;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sheet-cell--income .sheet-item__amount {
+  color: var(--positive);
+}
+
+.sheet-cell--expense .sheet-item__amount {
+  color: var(--negative);
+}
+
+.sheet-cell.is-pending .sheet-item__amount {
+  color: var(--pending);
+  font-style: italic;
+}
+
+.sheet-cell.is-overdue .sheet-item__amount {
+  color: var(--negative);
+}
+
+.sheet-cell.is-paid .sheet-item__name {
+  color: var(--text-muted);
+}
+
+/* ---- Add row ---- */
+
+.sheet-cell--add {
+  height: 34px;
+  cursor: default;
+}
+
+.sheet__add {
+  width: 100%;
+  height: 26px;
+  border: 1px dashed transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sheet__add:hover {
+  border-color: var(--border-strong);
+  color: var(--accent);
+}
+
+/* ---- Summary rows (sticky to the bottom, Excel totals block) ---- */
+
+.sheet tfoot th,
+.sheet tfoot td {
+  position: sticky;
+  z-index: 1;
+}
+
+.sheet__sum-row--remaining > * {
+  bottom: 0;
+  height: 48px;
+}
+
+.sheet__sum-row--pending > * {
+  bottom: 48px;
+  height: 36px;
+}
+
+.sheet__sum-row--total > * {
+  bottom: 84px;
+  height: 36px;
+  /* Double rule above the totals, as in a ledger. */
+  border-top: 3px double var(--border-strong);
+}
+
+.sheet-sum {
+  padding: 0 10px;
+  background: var(--surface-2) !important;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sheet-sum__inner {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Inline labels: one line, truncated, so the fixed row heights hold. */
+.sheet-sum__label {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-sum__value {
+  flex-shrink: 0;
+}
+
+.sheet-sum--income .sheet-sum__value {
+  color: var(--positive);
+}
+
+.sheet-sum--expense .sheet-sum__value {
+  color: var(--negative);
+}
+
+.sheet-sum--pending {
+  background: var(--pending-soft) !important;
+}
+
+.sheet-sum--pending .sheet-sum__value,
+.sheet-sum--pending .sheet-sum__label {
+  color: var(--pending);
+}
+
+.sheet-sum--muted .sheet-sum__value {
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.sheet-remaining {
+  padding: 2px 12px;
+  background: color-mix(in srgb, var(--positive) 12%, var(--surface)) !important;
+  color: var(--positive);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Label on top, big amount below, centred across both sub-columns. */
+.sheet-remaining__label {
+  display: block;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+}
+
+.sheet-remaining__value {
+  display: block;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.sheet-remaining.is-negative {
+  background: color-mix(in srgb, var(--negative) 12%, var(--surface)) !important;
+  color: var(--negative);
+}
+
+/* ---- Legend ---- */
+
+.sheet-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+
+.sheet-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.sheet-legend input {
+  margin: 0;
+  pointer-events: none;
+}
+
+.sheet-legend__pending::before,
+.sheet-legend__overdue::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.sheet-legend__pending::before {
+  background: color-mix(in srgb, var(--pending) 18%, var(--surface));
+}
+
+.sheet-legend__overdue::before {
+  background: var(--negative-soft);
+}
+
+/* ---- Settings ---------------------------------------------------------- */
+
+.settings-scroll {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 780px;
+  min-height: 0;
+  padding: 16px 18px 28px;
+  overflow-y: auto;
 }
 
 /* ---- Responsive tweaks for narrower windows ---------------------------- */
@@ -559,15 +511,7 @@
     width: 100%;
   }
 
-  .finance-columns {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .lanes {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .summary-cards {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

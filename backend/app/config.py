@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     )
 
     app_name: str = "Core-Track API"
-    app_version: str = "0.2.5"
+    app_version: str = "0.2.6"
     api_prefix: str = "/api"
     database_url: str = f"sqlite:///{DEFAULT_DB_PATH}"
     cors_origins: list[str] = [

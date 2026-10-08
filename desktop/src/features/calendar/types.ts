@@ -44,4 +44,12 @@ export interface CellHandlers {
   onDropDay: (iso: IsoDate) => void;
   /** `true` while one of our items is being dragged (ignore foreign drags). */
   isDragging: () => boolean;
+  /** The right-edge resize handle of a task was pressed. */
+  onResizeStart: (task: Task) => void;
+  /**
+   * `true` while a resize is in progress. Chips use it to cancel the native
+   * HTML5 drag their (draggable) element would otherwise start when the
+   * pointer moves from the resize handle.
+   */
+  isResizing: () => boolean;
 }

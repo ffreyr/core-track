@@ -6,6 +6,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "desktop", "run", "dev"],
       "port": 1420
+    },
+    {
+      "name": "desktop-web-test",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "VITE_API_BASE_URL=http://localhost:8001 npm --prefix desktop run dev -- --port 1431 --strictPort"],
+      "port": 1431
     }
   ]
 }

@@ -183,16 +183,6 @@
   font-size: 15px;
 }
 
-.panel__count {
-  min-width: 24px;
-  padding: 1px 8px;
-  border-radius: 10px;
-  background: var(--pending-soft);
-  color: var(--pending);
-  font-size: 12px;
-  font-weight: 700;
-  text-align: center;
-}
 
 .panel__lead {
   margin: 0 0 12px;

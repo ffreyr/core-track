@@ -127,6 +127,9 @@ function CalendarWeekRowComponent({
       className={fill ? "calendar-week is-fill" : "calendar-week"}
       style={rowStyle}
       data-row-key={row.key}
+      // Read by dayAtPoint() to map a pointer position to a day during resize.
+      data-row-isos={isos.join(",")}
+      data-columns={columns}
       role="row"
       onClick={(event) => handlers.onSelect(isoAt(event))}
       onDoubleClick={(event) => handlers.onQuickAdd(isoAt(event))}
@@ -220,6 +223,8 @@ function CalendarWeekRowComponent({
             onEdit={handlers.onEditTask}
             onDragStart={handlers.onDragStart}
             onDragEnd={handlers.onDragEnd}
+            onResizeStart={handlers.onResizeStart}
+            isResizing={handlers.isResizing}
           />
         ))}
 
@@ -250,6 +255,8 @@ function CalendarWeekRowComponent({
                 onEdit={handlers.onEditTask}
                 onDragStart={handlers.onDragStart}
                 onDragEnd={handlers.onDragEnd}
+                onResizeStart={handlers.onResizeStart}
+                isResizing={handlers.isResizing}
               />
             ))}
             {visibleFinance.map((log) => (

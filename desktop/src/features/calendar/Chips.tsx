@@ -10,6 +10,11 @@
  * All items are draggable. Pointer events stop at the item so clicking it
  * edits it instead of selecting the day, and double-clicking it does not
  * trigger the row's quick-add.
+ *
+ * Tasks additionally have a right-edge {@link ResizeHandle}: pressing it
+ * starts a pointer-driven resize of the task's end date (see
+ * useCalendarInteractions). A single-day chip resized to the right becomes a
+ * multi-day bar.
  */
 
 import type { CSSProperties, DragEvent, MouseEvent } from "react";
@@ -26,8 +31,25 @@ function stop(event: MouseEvent) {
   event.stopPropagation();
 }
 
-/** Start an HTML5 drag; the payload itself is tracked by the calendar in a ref. */
-function beginDrag(event: DragEvent, label: string, item: DragItem, onDragStart: (item: DragItem) => void) {
+/**
+ * Start an HTML5 drag; the payload itself is tracked by the calendar in a ref.
+ *
+ * When the pointer went down on a resize handle, the browser still tries to
+ * drag the (draggable) chip as soon as the pointer moves; `isResizing` lets
+ * us cancel that native drag so only the resize happens.
+ */
+function beginDrag(
+  event: DragEvent,
+  label: string,
+  item: DragItem,
+  onDragStart: (item: DragItem) => void,
+  isResizing: () => boolean,
+) {
+  if (isResizing()) {
+    event.preventDefault();
+    event.stopPropagation();
+    return;
+  }
   event.stopPropagation();
   event.dataTransfer.effectAllowed = "move";
   // Some engines refuse to start a drag without data; the value is informational.
@@ -38,6 +60,33 @@ function beginDrag(event: DragEvent, label: string, item: DragItem, onDragStart:
 /** Accent color of a task: its own color, else its scope color. */
 function taskAccent(task: Task): string {
   return task.color ?? SCOPE_META[task.scope].color;
+}
+
+/**
+ * Grip on the right edge of a task. Pressing it (primary button) starts a
+ * resize; `preventDefault` stops text selection and focus changes, and
+ * `stopPropagation` keeps the row from treating the press as a day click.
+ */
+function ResizeHandle({ task, onResizeStart }: { task: Task; onResizeStart: (task: Task) => void }) {
+  return (
+    <span
+      className="resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`Resize "${task.title}"`}
+      title="Drag to change the end date"
+      onPointerDown={(event) => {
+        if (event.button !== 0) {
+          return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        onResizeStart(task);
+      }}
+      onClick={stop}
+      onDoubleClick={stop}
+    />
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -52,10 +101,21 @@ interface TaskChipProps {
   onEdit: (task: Task) => void;
   onDragStart: (item: DragItem) => void;
   onDragEnd: () => void;
+  onResizeStart: (task: Task) => void;
+  isResizing: () => boolean;
 }
 
 /** A single-day task: checkbox, title and scope badge, tinted by color/scope. */
-export function TaskChip({ task, iso, onToggle, onEdit, onDragStart, onDragEnd }: TaskChipProps) {
+export function TaskChip({
+  task,
+  iso,
+  onToggle,
+  onEdit,
+  onDragStart,
+  onDragEnd,
+  onResizeStart,
+  isResizing,
+}: TaskChipProps) {
   const className = [
     "chip",
     "chip--task",
@@ -71,7 +131,13 @@ export function TaskChip({ task, iso, onToggle, onEdit, onDragStart, onDragEnd }
       style={{ "--chip-accent": taskAccent(task) } as CSSProperties}
       draggable
       onDragStart={(event) =>
-        beginDrag(event, task.title, { type: "task", id: task.id, originIso: task.due_date, grabIso: iso }, onDragStart)
+        beginDrag(
+          event,
+          task.title,
+          { type: "task", id: task.id, originIso: task.due_date, grabIso: iso },
+          onDragStart,
+          isResizing,
+        )
       }
       onDragEnd={onDragEnd}
       onClick={stop}
@@ -89,6 +155,7 @@ export function TaskChip({ task, iso, onToggle, onEdit, onDragStart, onDragEnd }
         {task.title}
       </button>
       <ScopeBadge scope={task.scope} />
+      <ResizeHandle task={task} onResizeStart={onResizeStart} />
     </div>
   );
 }
@@ -107,6 +174,8 @@ interface TaskBarProps {
   onEdit: (task: Task) => void;
   onDragStart: (item: DragItem) => void;
   onDragEnd: () => void;
+  onResizeStart: (task: Task) => void;
+  isResizing: () => boolean;
 }
 
 /**
@@ -114,8 +183,21 @@ interface TaskBarProps {
  *
  * Edges that continue into the previous/next row are drawn flat with an
  * arrow, so the user can tell the bar is a fragment of a longer task.
+ *
+ * The resize handle is shown only on the segment that contains the task's
+ * real last day (`!continuesAfter`), exactly where Google Calendar puts it.
  */
-export function TaskBar({ segment, rowIsos, style, onToggle, onEdit, onDragStart, onDragEnd }: TaskBarProps) {
+export function TaskBar({
+  segment,
+  rowIsos,
+  style,
+  onToggle,
+  onEdit,
+  onDragStart,
+  onDragEnd,
+  onResizeStart,
+  isResizing,
+}: TaskBarProps) {
   const { task, startCol, endCol, continuesBefore, continuesAfter } = segment;
   const className = [
     "task-bar",
@@ -147,6 +229,7 @@ export function TaskBar({ segment, rowIsos, style, onToggle, onEdit, onDragStart
           task.title,
           { type: "task", id: task.id, originIso: task.due_date, grabIso: grabbedIso(event) },
           onDragStart,
+          isResizing,
         )
       }
       onDragEnd={onDragEnd}
@@ -166,7 +249,11 @@ export function TaskBar({ segment, rowIsos, style, onToggle, onEdit, onDragStart
         {task.title}
       </button>
       <ScopeBadge scope={task.scope} />
-      {continuesAfter ? <span className="task-bar__arrow" aria-hidden="true">›</span> : null}
+      {continuesAfter ? (
+        <span className="task-bar__arrow" aria-hidden="true">›</span>
+      ) : (
+        <ResizeHandle task={task} onResizeStart={onResizeStart} />
+      )}
     </div>
   );
 }
@@ -197,6 +284,7 @@ export function FinanceChip({ log, onEdit, onDragStart, onDragEnd }: FinanceChip
           log.category,
           { type: "finance", id: log.id, originIso: log.occurred_on, grabIso: log.occurred_on },
           onDragStart,
+          () => false,
         )
       }
       onDragEnd={onDragEnd}
