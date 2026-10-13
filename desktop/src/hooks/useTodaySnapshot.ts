@@ -41,11 +41,19 @@ export interface TodaySnapshot {
 /** Workflow rank for display: in progress first, then to do, then done. */
 const STATUS_RANK = { in_progress: 0, todo: 1, done: 2 } as const;
 
-/** In-progress tasks first, then open ones, then done; each by priority, then title. */
+/**
+ * In-progress tasks first, then open ones, then done. Within each group:
+ * all-day tasks, then timed tasks by start time ("HH:MM" sorts correctly),
+ * then priority (high first) and title.
+ */
 function sortForGlance(tasks: Task[]): Task[] {
   return [...tasks].sort(
     (a, b) =>
-      STATUS_RANK[a.status] - STATUS_RANK[b.status] || b.priority - a.priority || a.title.localeCompare(b.title),
+      STATUS_RANK[a.status] - STATUS_RANK[b.status] ||
+      Number(a.due_time !== null) - Number(b.due_time !== null) ||
+      (a.due_time ?? "").localeCompare(b.due_time ?? "") ||
+      b.priority - a.priority ||
+      a.title.localeCompare(b.title),
   );
 }
 

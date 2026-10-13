@@ -107,10 +107,21 @@ def _v3_task_status(conn: Connection) -> None:
     conn.exec_driver_sql('CREATE INDEX IF NOT EXISTS "ix_tasks_status" ON "tasks" ("status")')
 
 
+def _v4_task_times(conn: Connection) -> None:
+    """Optional start/end clock times on tasks (``HH:MM``, 24-hour).
+
+    * ``tasks.due_time`` / ``tasks.end_time`` – both nullable; existing tasks
+      stay all-day (``NULL``).
+    """
+    _add_column_if_missing(conn, "tasks", "due_time", "VARCHAR(5)")
+    _add_column_if_missing(conn, "tasks", "end_time", "VARCHAR(5)")
+
+
 #: Ordered list of all migrations. Append new steps; never edit applied ones.
 MIGRATIONS: tuple[Migration, ...] = (
     Migration(2, "add tasks.end_date and financial_logs.is_paid", _v2_multi_day_tasks_and_pending_payments),
     Migration(3, "add tasks.status (todo / in_progress / done)", _v3_task_status),
+    Migration(4, "add tasks.due_time and tasks.end_time (HH:MM)", _v4_task_times),
 )
 
 #: Schema version produced by the current models.

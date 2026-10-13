@@ -40,6 +40,7 @@ import { hideCurrentWindow, inDesktopApp, openMainWindow } from "../lib/desktopB
 import { SCOPE_META } from "../lib/labels";
 import { formatClock, formatDuration } from "../lib/duration";
 import { formatMoney } from "../lib/money";
+import { formatTaskTime } from "../lib/taskTime";
 import { usePreferences } from "../state/preferences";
 import { useSyncStatus } from "../state/sync";
 
@@ -136,6 +137,7 @@ export function WidgetApp() {
                     onToggle={() => void run(() => api.tasks.toggle(task.id))}
                   />
                   <span className="widget__task-title" title={task.title}>
+                    {formatTaskTime(task) ? <span className="widget__task-time">{formatTaskTime(task)}</span> : null}
                     {task.title}
                   </span>
                   {task.priority === 3 && !task.is_completed ? (

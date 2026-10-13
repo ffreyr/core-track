@@ -114,3 +114,16 @@ def test_rejects_too_long_range(client: TestClient) -> None:
 def test_health(client: TestClient) -> None:
     body = client.get("/api/health").json()
     assert body["status"] == "ok"
+
+
+def test_day_order_puts_timed_tasks_after_all_day_chronologically(client: TestClient) -> None:
+    day = "2026-10-08"
+    client.post("/api/tasks", json={"title": "Dinner", "due_date": day, "due_time": "19:00"})
+    client.post("/api/tasks", json={"title": "Standup", "due_date": day, "due_time": "09:30", "end_time": "09:45"})
+    client.post("/api/tasks", json={"title": "Groceries", "due_date": day, "priority": 3})
+    client.post("/api/tasks", json={"title": "Conference", "due_date": "2026-10-07", "end_date": "2026-10-09"})
+
+    body = client.get("/api/calendar", params={"start": day, "end": day}).json()
+    tasks = body["days"][0]["tasks"]
+    assert [t["title"] for t in tasks] == ["Conference", "Groceries", "Standup", "Dinner"]
+    assert (tasks[2]["due_time"], tasks[2]["end_time"]) == ("09:30", "09:45")

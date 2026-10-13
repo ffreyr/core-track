@@ -51,6 +51,10 @@ export interface Task {
   scope: TaskScope;
   due_date: IsoDate;
   end_date: IsoDate | null;
+  /** Start time "HH:MM" (24-hour) on `due_date`; `null` = all-day. */
+  due_time: string | null;
+  /** End time "HH:MM" on the last day; requires `due_time`. */
+  end_time: string | null;
   span_days: number;
   priority: TaskPriority;
   color: string | null;
@@ -69,6 +73,10 @@ export type TaskCreate = {
   due_date: IsoDate;
   /** Last day of a multi-day task; omit or `null` for a single day. */
   end_date?: IsoDate | null;
+  /** Optional start time "HH:MM" (24-hour); `null` = all-day. */
+  due_time?: string | null;
+  /** Optional end time "HH:MM"; requires `due_time`. */
+  end_time?: string | null;
   priority?: TaskPriority;
   color?: string | null;
   /** Defaults to `"todo"` on the server. */

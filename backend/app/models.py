@@ -166,6 +166,12 @@ class TaskItem(Base):
           application code rather than a CHECK constraint so databases
           upgraded by ``ALTER TABLE`` (which cannot add constraints in SQLite)
           and freshly created databases behave identically.
+        * ``due_time`` / ``end_time`` are optional ``HH:MM`` (24-hour) local
+          times. ``due_time`` is the start time on ``due_date``; ``end_time``
+          is the end time on the last day (``end_date`` or ``due_date``).
+          No ``due_time`` means an all-day task, and ``end_time`` requires a
+          ``due_time``. For a single-day task ``end_time`` is never earlier
+          than ``due_time`` (validated in :mod:`app.crud`).
         * ``status`` is ``todo``, ``in_progress`` or ``done``. ``is_completed``
           mirrors ``status == done`` and ``completed_at`` is stamped when the
           task reaches ``done`` and cleared when it leaves it; both are
@@ -199,6 +205,11 @@ class TaskItem(Base):
     )
     due_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    # Optional local clock times as zero-padded "HH:MM" (24-hour). Strings in
+    # this format sort chronologically, so SQL can order by them directly.
+    # NULL due_time = all-day task.
+    due_time: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    end_time: Mapped[str | None] = mapped_column(String(5), nullable=True)
     # server_default mirrors the v3 migration's "DEFAULT 'todo'" so fresh and
     # upgraded databases have identical column definitions.
     status: Mapped[TaskStatus] = mapped_column(

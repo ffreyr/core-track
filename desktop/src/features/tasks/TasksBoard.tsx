@@ -30,6 +30,7 @@ import {
   type WeekStart,
 } from "../../lib/dates";
 import { PRIORITY_LABELS, SCOPE_META } from "../../lib/labels";
+import { formatTaskTime } from "../../lib/taskTime";
 import { usePreferences } from "../../state/preferences";
 import { useEditors } from "../editors/EditorsProvider";
 
@@ -157,6 +158,7 @@ export function TasksBoard({ anchor, onAnchorChange }: TasksBoardProps) {
                         </span>
                         <span className="item-row__meta">
                           Due {task.end_date ? formatDateRange(parseIsoDate(task.due_date), parseIsoDate(task.end_date)) : formatShortDay(parseIsoDate(task.due_date))}
+                          {formatTaskTime(task) ? ` · ${formatTaskTime(task)}` : ""}
                           {task.priority > 0 ? ` · ${PRIORITY_LABELS[task.priority]}` : ""}
                         </span>
                       </button>

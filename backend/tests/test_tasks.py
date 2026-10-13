@@ -152,3 +152,83 @@ def test_list_filters_by_status(client: TestClient) -> None:
     assert [t["title"] for t in in_progress] == ["B"]
     open_tasks = client.get("/api/tasks", params={"completed": False}).json()
     assert sorted(t["title"] for t in open_tasks) == ["A", "B"]
+
+
+# ---------------------------------------------------------------------------
+# Start / end times (HH:MM, 24-hour)
+# ---------------------------------------------------------------------------
+
+
+def test_tasks_are_all_day_by_default(client: TestClient) -> None:
+    task = _create(client)
+    assert (task["due_time"], task["end_time"]) == (None, None)
+
+
+def test_create_timed_task(client: TestClient) -> None:
+    task = _create(client, due_time="14:30", end_time="16:00")
+    assert (task["due_time"], task["end_time"]) == ("14:30", "16:00")
+    start_only = _create(client, title="Call", due_time="09:05")
+    assert (start_only["due_time"], start_only["end_time"]) == ("09:05", None)
+    # Equal start and end is allowed (a point-in-time reminder).
+    same = _create(client, title="Pill", due_time="08:00", end_time="08:00")
+    assert same["end_time"] == "08:00"
+
+
+def test_time_format_and_order_validation(client: TestClient) -> None:
+    base = {"title": "x", "due_date": "2026-10-01"}
+    for bad in ["9:30", "24:00", "12:60", "1430", "2:30 PM", ""]:
+        assert client.post("/api/tasks", json={**base, "due_time": bad}).status_code == 422, bad
+    # end_time without due_time.
+    assert client.post("/api/tasks", json={**base, "end_time": "10:00"}).status_code == 422
+    # Single-day: end before start is rejected.
+    assert client.post("/api/tasks", json={**base, "due_time": "16:00", "end_time": "14:00"}).status_code == 422
+    # Multi-day: end time belongs to the last day, so it may be "earlier".
+    multi = client.post(
+        "/api/tasks",
+        json={**base, "end_date": "2026-10-03", "due_time": "18:00", "end_time": "09:00"},
+    )
+    assert multi.status_code == 201
+
+
+def test_update_times_and_clear_to_all_day(client: TestClient) -> None:
+    task = _create(client)
+    url = f"/api/tasks/{task['id']}"
+
+    timed = client.patch(url, json={"due_time": "10:00", "end_time": "11:30"}).json()
+    assert (timed["due_time"], timed["end_time"]) == ("10:00", "11:30")
+
+    # Moving the date keeps the times.
+    moved = client.patch(url, json={"due_date": "2026-10-05"}).json()
+    assert (moved["due_date"], moved["due_time"], moved["end_time"]) == ("2026-10-05", "10:00", "11:30")
+
+    # A new start after the existing end is rejected and nothing changes.
+    rejected = client.patch(url, json={"due_time": "12:00"})
+    assert rejected.status_code == 422
+    assert client.get(url).json()["due_time"] == "10:00"
+
+    # Clearing the start time makes the task all-day (end time cleared too).
+    all_day = client.patch(url, json={"due_time": None}).json()
+    assert (all_day["due_time"], all_day["end_time"]) == (None, None)
+
+    # end_time alone on an all-day task is rejected.
+    assert client.patch(url, json={"end_time": "09:00"}).status_code == 422
+
+
+def test_collapsing_multi_day_validates_times(client: TestClient) -> None:
+    task = _create(client, end_date="2026-10-03", due_time="18:00", end_time="09:00")
+    response = client.patch(f"/api/tasks/{task['id']}", json={"end_date": None})
+    assert response.status_code == 422
+    assert "end_time" in response.json()["detail"]
+
+
+def test_list_orders_multi_day_then_all_day_then_by_time(client: TestClient) -> None:
+    day = {"due_date": "2026-10-08"}
+    _create(client, title="Late", due_time="18:00", **day)
+    _create(client, title="Early", due_time="07:30", **day)
+    _create(client, title="All-day low", priority=0, **day)
+    _create(client, title="All-day high", priority=3, **day)
+    _create(client, title="Trip", end_date="2026-10-10", **day)
+    _create(client, title="Noon", due_time="12:00", **day)
+
+    titles = [t["title"] for t in client.get("/api/tasks", params={"start": "2026-10-08", "end": "2026-10-08"}).json()]
+    assert titles == ["Trip", "All-day high", "All-day low", "Early", "Noon", "Late"]

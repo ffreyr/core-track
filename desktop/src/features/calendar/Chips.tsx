@@ -23,6 +23,7 @@ import type { FinanceLog, IsoDate, Task } from "../../api";
 import { ScopeBadge } from "../../components/controls";
 import { SCOPE_META } from "../../lib/labels";
 import { formatMoney } from "../../lib/money";
+import { formatTaskTime } from "../../lib/taskTime";
 import type { BarSegment } from "./spans";
 import type { DragItem } from "./types";
 
@@ -71,7 +72,9 @@ function inProgressRef(task: Task) {
 
 /** Tooltip suffix describing the task's status. */
 function statusNote(task: Task): string {
-  return task.status === "in_progress" ? " · In progress" : task.status === "done" ? " · Done" : "";
+  const time = formatTaskTime(task);
+  const status = task.status === "in_progress" ? " · In progress" : task.status === "done" ? " · Done" : "";
+  return `${time ? ` · ${time}` : ""}${status}`;
 }
 
 /** Accent color of a task: its own color, else its scope color. */
@@ -133,6 +136,8 @@ export function TaskChip({
   onResizeStart,
   isResizing,
 }: TaskChipProps) {
+  // Single-day chips show their time ("14:30" or "14:30–16:00") before the title.
+  const timeLabel = formatTaskTime(task);
   const className = [
     "chip",
     "chip--task",
@@ -170,6 +175,17 @@ export function TaskChip({
         onChange={() => onToggle(task)}
         aria-label={task.is_completed ? `Reopen "${task.title}"` : `Complete "${task.title}"`}
       />
+      {task.due_time ? (
+        // The end part hides itself when the chip is narrow (container query in
+        // calendar.css), so a tight cell shows "09:30 Title" rather than a time
+        // range with no title. The full range is in the tooltip.
+        <span className="chip__time" title={timeLabel ?? undefined}>
+          {task.due_time}
+          {task.end_time && task.end_time !== task.due_time ? (
+            <span className="chip__time-end">–{task.end_time}</span>
+          ) : null}
+        </span>
+      ) : null}
       <button type="button" className="chip__label" onClick={() => onEdit(task)}>
         {task.title}
       </button>

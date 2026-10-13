@@ -388,6 +388,37 @@
   cursor: pointer;
 }
 
+/* Start time ("14:30" / "14:30–16:00") in front of a single-day chip's title. */
+.chip--task {
+  /* Lets the time label adapt to the chip's own width (see below). */
+  container-type: inline-size;
+}
+
+/* Narrow chips (week view with the day panel open, month cells): show only
+   the start time so the title stays readable. */
+@container (max-width: 190px) {
+  .chip__time-end {
+    display: none;
+  }
+}
+
+/* Very narrow chips: drop the scope letter too; the chip's colour already
+   carries the scope, and the title needs the room more. */
+@container (max-width: 140px) {
+  .chip--task .scope-badge {
+    display: none;
+  }
+}
+
+.chip__time {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--chip-accent) 70%, var(--text));
+  font-family: var(--font-rounded);
+  font-size: 0.92em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .chip__label {
   flex: 1;
   overflow: hidden;
@@ -451,9 +482,10 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  width: 340px;
+  /* About 40% of the window: 460 px on small windows, up to 640 px. */
+  width: clamp(460px, 40vw, 640px);
   flex-shrink: 0;
-  padding: 16px;
+  padding: 18px 20px;
   overflow-y: auto;
   border-left: 1px solid var(--border);
   background: var(--surface);

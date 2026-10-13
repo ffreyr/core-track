@@ -185,6 +185,15 @@ body.widget-body #root {
   transition: color 0.2s;
 }
 
+.widget__task-time {
+  margin-right: 6px;
+  color: var(--accent);
+  font-family: var(--font-rounded);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .widget__task.is-done .widget__task-title {
   color: var(--text-faint);
   text-decoration: line-through;

@@ -92,7 +92,7 @@ def test_phase_1_database_is_upgraded_with_data_preserved(tmp_path: Path) -> Non
         conn.executescript(PHASE_1_SCHEMA)
     engine = build_engine(f"sqlite:///{db_path}")
 
-    assert run_migrations(engine, _create_all, db_path) == [2, 3]
+    assert run_migrations(engine, _create_all, db_path) == [2, 3, 4]
     assert _user_version(db_path) == LATEST_VERSION
 
     with engine.connect() as conn:
@@ -116,7 +116,7 @@ def test_running_twice_is_a_no_op(tmp_path: Path) -> None:
         conn.executescript(PHASE_1_SCHEMA)
     engine = build_engine(f"sqlite:///{db_path}")
 
-    assert run_migrations(engine, _create_all, db_path) == [2, 3]
+    assert run_migrations(engine, _create_all, db_path) == [2, 3, 4]
     assert run_migrations(engine, _create_all, db_path) == []
     assert len(list((tmp_path / "backups").iterdir())) == 1
     engine.dispose()
@@ -130,9 +130,10 @@ def test_interrupted_migration_can_be_resumed(tmp_path: Path) -> None:
         conn.execute("ALTER TABLE tasks ADD COLUMN end_date DATE")  # first step done, then "crash"
     engine = build_engine(f"sqlite:///{db_path}")
 
-    assert run_migrations(engine, _create_all, db_path) == [2, 3]
+    assert run_migrations(engine, _create_all, db_path) == [2, 3, 4]
     assert "is_paid" in _columns(db_path, "financial_logs")
     assert "status" in _columns(db_path, "tasks")
+    assert {"due_time", "end_time"} <= _columns(db_path, "tasks")
     engine.dispose()
 
 
@@ -146,8 +147,31 @@ def test_v2_database_upgrades_to_task_status(tmp_path: Path) -> None:
         conn.execute("PRAGMA user_version = 2")
     engine = build_engine(f"sqlite:///{db_path}")
 
-    assert run_migrations(engine, _create_all, db_path) == [3]
+    assert run_migrations(engine, _create_all, db_path) == [3, 4]
     with engine.connect() as conn:
         statuses = conn.execute(text("SELECT title, status FROM tasks ORDER BY id")).all()
     assert [tuple(row) for row in statuses] == [("Old task", "todo"), ("Finished task", "done")]
+    engine.dispose()
+
+
+def test_v3_database_upgrades_to_task_times(tmp_path: Path) -> None:
+    """A database at v3 (task status) gains tasks.due_time/end_time only."""
+    db_path = tmp_path / "v3.db"
+    with _connect(db_path) as conn:
+        conn.executescript(PHASE_1_SCHEMA)
+        conn.execute("ALTER TABLE tasks ADD COLUMN end_date DATE")
+        conn.execute("ALTER TABLE financial_logs ADD COLUMN is_paid BOOLEAN NOT NULL DEFAULT 1")
+        conn.execute("ALTER TABLE tasks ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'todo'")
+        conn.execute("PRAGMA user_version = 3")
+    engine = build_engine(f"sqlite:///{db_path}")
+
+    assert run_migrations(engine, _create_all, db_path) == [4]
+    assert _user_version(db_path) == LATEST_VERSION == 4
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT title, due_time, end_time FROM tasks ORDER BY id")).all()
+    # Existing tasks stay all-day.
+    assert [tuple(row) for row in rows] == [("Old task", None, None), ("Finished task", None, None)]
+    backups = list((tmp_path / "backups").glob("v3-*-pre-v4.db"))
+    assert len(backups) == 1
+    assert "due_time" not in _columns(backups[0], "tasks")
     engine.dispose()

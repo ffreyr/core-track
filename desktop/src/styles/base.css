@@ -377,6 +377,18 @@ textarea.input {
   width: auto;
 }
 
+/* 24-hour time fields ("HH:MM"). */
+.input--time {
+  width: 96px;
+  font-family: var(--font-rounded);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.input--time:disabled {
+  opacity: 0.5;
+}
+
 .input-row {
   display: flex;
   gap: 8px;

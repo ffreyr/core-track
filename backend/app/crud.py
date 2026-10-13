@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app import schemas
@@ -76,6 +76,19 @@ def _apply_completion(task: TaskItem, is_completed: bool) -> None:
         _apply_status(task, TaskStatus.TODO)
 
 
+def _check_task_times(end_date: date | None, due_time: str | None, end_time: str | None) -> None:
+    """Apply the task time rules to the *final* values of an update.
+
+    Raises:
+        TaskDateRangeError: If the times are inconsistent (see
+            :func:`app.schemas.validate_task_times`).
+    """
+    try:
+        schemas.validate_task_times(end_date is not None, due_time, end_time)
+    except ValueError as error:
+        raise TaskDateRangeError(str(error)) from error
+
+
 def _normalize_task_range(due_date: date, end_date: date | None) -> date | None:
     """Validate a task's date range and return the ``end_date`` to store.
 
@@ -123,7 +136,9 @@ def list_tasks(
         status: Only tasks in this workflow status.
 
     Returns:
-        Tasks ordered by start date, then priority (high first), then id.
+        Tasks ordered by start date; within a day multi-day tasks first, then
+        all-day tasks, then timed tasks by start time; ties by priority (high
+        first), then id.
     """
     stmt = select(TaskItem)
     if scope is not None:
@@ -137,7 +152,16 @@ def list_tasks(
         stmt = stmt.where(TaskItem.is_completed == completed)
     if status is not None:
         stmt = stmt.where(TaskItem.status == status)
-    stmt = stmt.order_by(TaskItem.due_date, TaskItem.priority.desc(), TaskItem.id)
+    # Within a day: multi-day tasks first, then all-day tasks, then timed
+    # tasks chronologically ("HH:MM" strings sort correctly); ties by priority.
+    stmt = stmt.order_by(
+        TaskItem.due_date,
+        case((TaskItem.end_date.is_not(None), 0), else_=1),
+        case((TaskItem.due_time.is_(None), 0), else_=1),
+        TaskItem.due_time,
+        TaskItem.priority.desc(),
+        TaskItem.id,
+    )
     return db.scalars(stmt).all()
 
 
@@ -155,6 +179,7 @@ def create_task(db: Session, payload: schemas.TaskCreate) -> TaskItem:
     """
     data = payload.model_dump()
     data["end_date"] = _normalize_task_range(data["due_date"], data["end_date"])
+    _check_task_times(data["end_date"], data["due_time"], data["end_time"])
     status = data.pop("status")
     task = TaskItem(**data, status=TaskStatus.TODO, is_completed=False)
     _apply_status(task, status)
@@ -198,6 +223,17 @@ def update_task(db: Session, task: TaskItem, payload: schemas.TaskUpdate) -> Tas
         new_end = task.end_date
     changes["due_date"] = new_due
     changes["end_date"] = _normalize_task_range(new_due, new_end)
+
+    # Times: explicitly clearing due_time makes the task all-day, so its
+    # end_time goes too (unless this request sets end_time itself, in which
+    # case the rules below reject the inconsistent combination).
+    new_due_time = changes.get("due_time", task.due_time)
+    new_end_time = changes.get("end_time", task.end_time)
+    if "due_time" in changes and new_due_time is None and "end_time" not in changes:
+        new_end_time = None
+    _check_task_times(changes["end_date"], new_due_time, new_end_time)
+    changes["due_time"] = new_due_time
+    changes["end_time"] = new_end_time
 
     for field_name, value in changes.items():
         setattr(task, field_name, value)
@@ -476,17 +512,20 @@ class _DayBucket:
         return sum(1 for task in self.tasks if task.is_completed)
 
 
-def _calendar_task_order(task: TaskItem) -> tuple[bool, date, int, int, int]:
+def _calendar_task_order(task: TaskItem) -> tuple[int, date, int, str, int, int]:
     """Sort key for tasks inside one calendar day.
 
-    Multi-day tasks come first, ordered by earliest start, then longest span,
-    then id. Because this order is identical on every day a task covers,
-    clients can assign each multi-day task a stable "lane" and draw it as one
-    continuous bar. Single-day tasks follow, highest priority first.
+    1. Multi-day tasks, by earliest start, then longest span, then id. This
+       order is identical on every day a task covers, so clients can assign
+       each one a stable "lane" and draw it as one continuous bar.
+    2. All-day single-day tasks (no ``due_time``), highest priority first.
+    3. Timed single-day tasks, chronologically by ``due_time``, then priority.
     """
     if task.is_multi_day:
-        return (False, task.due_date, -task.span_days, 0, task.id)
-    return (True, date.min, 0, -task.priority, task.id)
+        return (0, task.due_date, -task.span_days, "", 0, task.id)
+    if task.due_time is None:
+        return (1, date.min, 0, "", -task.priority, task.id)
+    return (2, date.min, 0, task.due_time, -task.priority, task.id)
 
 
 def build_calendar(db: Session, start: date, end: date) -> schemas.CalendarResponse:

@@ -6,6 +6,10 @@
  * editable and the task can be deleted. The status (To do / In progress /
  * Done) can be chosen in both modes.
  *
+ * Times: optional 24-hour start/end times ("HH:MM") next to the dates. With
+ * no start time the task is all-day; "All day" clears both times. For a
+ * single-day task the end time cannot be earlier than the start time.
+ *
  * Multi-day tasks: an optional "Until" date turns the task into a block
  * spanning several days on the calendar. Clearing it (or choosing the same
  * day) makes it a single-day task again. Moving the start date keeps the
@@ -29,6 +33,7 @@ import { Modal } from "../../components/Modal";
 import { useApiAction } from "../../hooks/useApi";
 import { addDays, diffInDays, parseIsoDate, toIsoDate } from "../../lib/dates";
 import { PRIORITY_LABELS, SCOPE_META, STATUS_LABELS, TASK_COLOR_SWATCHES } from "../../lib/labels";
+import { normalizeTimeInput } from "../../lib/taskTime";
 
 export interface TaskEditorProps {
   /** Existing task to edit; omit to create a new one. */
@@ -54,6 +59,10 @@ export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose 
   const [scope, setScope] = useState<TaskScope>(task?.scope ?? defaultScope);
   const [dueDate, setDueDate] = useState<IsoDate>(task?.due_date ?? defaultDate);
   const [endDate, setEndDate] = useState<IsoDate>(task?.end_date ?? "");
+  // Raw text of the time fields; normalised to "HH:MM" on blur and submit.
+  const [startTime, setStartTime] = useState(task?.due_time ?? "");
+  const [endTime, setEndTime] = useState(task?.end_time ?? "");
+  const [timeError, setTimeError] = useState<string | null>(null);
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? 1);
   const [color, setColor] = useState<string | null>(task?.color ?? null);
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? "todo");
@@ -93,6 +102,23 @@ export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose 
       return;
     }
 
+    // Times: validate and normalise to 24-hour "HH:MM".
+    const dueTime = normalizeTimeInput(startTime);
+    const finalEndTime = normalizeTimeInput(endTime);
+    if (dueTime === undefined || finalEndTime === undefined) {
+      setTimeError("Use 24-hour time, e.g. 09:30 or 14:00.");
+      return;
+    }
+    if (finalEndTime !== null && dueTime === null) {
+      setTimeError("Set a start time, or clear the end time.");
+      return;
+    }
+    const multiDay = Boolean(endDate) && endDate !== dueDate;
+    if (!multiDay && dueTime !== null && finalEndTime !== null && finalEndTime < dueTime) {
+      setTimeError("The end time cannot be earlier than the start time.");
+      return;
+    }
+
     setSaving(true);
     const fields = {
       title: trimmedTitle,
@@ -101,6 +127,8 @@ export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose 
       due_date: dueDate,
       // Same day or empty → single-day task (the backend normalises too).
       end_date: endDate && endDate !== dueDate ? endDate : null,
+      due_time: dueTime,
+      end_time: finalEndTime,
       priority,
       color,
       status,
@@ -217,6 +245,70 @@ export function TaskEditor({ task, defaultDate, defaultScope = "daily", onClose 
                   title="Make it a single-day task"
                 >
                   Clear
+                </button>
+              ) : null}
+            </div>
+          </Field>
+        </div>
+
+        <div className="form__row form__row--times">
+          <Field label="Start time" htmlFor="task-start-time" error={timeError}>
+            <input
+              id="task-start-time"
+              className="input input--time"
+              inputMode="numeric"
+              placeholder="All day"
+              maxLength={5}
+              value={startTime}
+              onChange={(event) => {
+                setStartTime(event.target.value);
+                setTimeError(null);
+              }}
+              onBlur={() => {
+                const normalized = normalizeTimeInput(startTime);
+                if (normalized !== undefined) {
+                  setStartTime(normalized ?? "");
+                }
+              }}
+            />
+          </Field>
+          <Field
+            label="End time"
+            htmlFor="task-end-time"
+            hint={spanDays > 1 ? "On the last day of the block." : "24-hour, e.g. 14:30."}
+          >
+            <div className="input-row">
+              <input
+                id="task-end-time"
+                className="input input--time"
+                inputMode="numeric"
+                placeholder="—"
+                maxLength={5}
+                value={endTime}
+                disabled={startTime.trim() === ""}
+                onChange={(event) => {
+                  setEndTime(event.target.value);
+                  setTimeError(null);
+                }}
+                onBlur={() => {
+                  const normalized = normalizeTimeInput(endTime);
+                  if (normalized !== undefined) {
+                    setEndTime(normalized ?? "");
+                  }
+                }}
+              />
+              {startTime || endTime ? (
+                <button
+                  type="button"
+                  className="button"
+                  onClick={() => {
+                    setStartTime("");
+                    setEndTime("");
+                    setTimeError(null);
+                  }}
+                  title="Remove the times (all-day task)"
+                >
+                  All day
                 </button>
               ) : null}
             </div>

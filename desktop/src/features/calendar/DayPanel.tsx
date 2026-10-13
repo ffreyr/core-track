@@ -19,6 +19,7 @@ import { useApiAction, useApiQuery } from "../../hooks/useApi";
 import { formatDateRange, formatLongDay, parseIsoDate } from "../../lib/dates";
 import { PRIORITY_LABELS, SCOPE_META } from "../../lib/labels";
 import { formatMoney } from "../../lib/money";
+import { formatTaskTime } from "../../lib/taskTime";
 import { usePreferences } from "../../state/preferences";
 import { useEditors } from "../editors/EditorsProvider";
 
@@ -99,9 +100,13 @@ export function DayPanel({ iso, onClose, onToggleTask }: DayPanelProps) {
                 <button type="button" className="item-row__main" onClick={() => openTask({ task })}>
                   <span className="item-row__title">{task.title}</span>
                   <span className="item-row__meta">
-                    {task.span_days > 1 ? multiDayLabel(task, iso) : null}
-                    {task.span_days > 1 && task.priority > 0 ? " · " : null}
-                    {task.priority > 0 ? `${PRIORITY_LABELS[task.priority]} priority` : null}
+                    {[
+                      formatTaskTime(task),
+                      task.span_days > 1 ? multiDayLabel(task, iso) : null,
+                      task.priority > 0 ? `${PRIORITY_LABELS[task.priority]} priority` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 </button>
                 <StatusAction

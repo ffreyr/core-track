@@ -40,6 +40,9 @@ HexColor = Annotated[str, Field(pattern=r"^#[0-9A-Fa-f]{6}$")]
 #: Upper-case ISO-4217 currency code such as ``TRY`` or ``USD``.
 CurrencyCode = Annotated[str, Field(pattern=r"^[A-Z]{3}$")]
 
+#: Local clock time "HH:MM", 24-hour, zero-padded (e.g. "09:05", "14:30").
+TaskTime = Annotated[str, Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$", examples=["14:30"])]
+
 #: Task priority: 0 = none, 1 = low, 2 = medium, 3 = high.
 Priority = Annotated[int, Field(ge=0, le=3)]
 
@@ -84,12 +87,34 @@ class _PatchModel(_InputModel):
 # ---------------------------------------------------------------------------
 
 
+def validate_task_times(multi_day: bool, due_time: str | None, end_time: str | None) -> None:
+    """Shared time rules for tasks (used by the schema and by ``app.crud``).
+
+    * ``end_time`` requires ``due_time``.
+    * For a single-day task, ``end_time`` cannot be earlier than ``due_time``
+      (equal is allowed). ``HH:MM`` strings compare chronologically.
+    * For a multi-day task, ``end_time`` belongs to the last day, so any
+      combination is valid.
+
+    Raises:
+        ValueError: If a rule is broken.
+    """
+    if end_time is not None and due_time is None:
+        raise ValueError("end_time requires due_time")
+    if not multi_day and due_time is not None and end_time is not None and end_time < due_time:
+        raise ValueError("end_time cannot be earlier than due_time for a single-day task")
+
+
 class TaskCreate(_InputModel):
     """Payload for creating a task.
 
     ``end_date`` turns the task into a multi-day block (Google Calendar style)
     covering ``due_date`` through ``end_date`` inclusive. Omit it, or send the
     same day as ``due_date``, for a single-day task.
+
+    ``due_time`` / ``end_time`` (``HH:MM``, 24-hour) are optional; without a
+    ``due_time`` the task is all-day. ``end_time`` needs a ``due_time``, and
+    for a single-day task it cannot be earlier than ``due_time``.
     """
 
     title: TaskTitle
@@ -97,6 +122,8 @@ class TaskCreate(_InputModel):
     scope: TaskScope = TaskScope.DAILY
     due_date: date
     end_date: date | None = None
+    due_time: TaskTime | None = None
+    end_time: TaskTime | None = None
     priority: Priority = 1
     color: HexColor | None = None
     status: TaskStatus = TaskStatus.TODO
@@ -115,6 +142,7 @@ class TaskCreate(_InputModel):
                 raise ValueError(f"A task can span at most {MAX_TASK_SPAN_DAYS} days")
             if self.end_date == self.due_date:
                 self.end_date = None
+        validate_task_times(self.end_date is not None, self.due_time, self.end_time)
         return self
 
 
@@ -148,6 +176,9 @@ class TaskUpdate(_PatchModel):
     color: HexColor | None = None
     is_completed: bool | None = None
     status: TaskStatus | None = None
+    # null clears a time; clearing due_time also clears end_time (all-day).
+    due_time: TaskTime | None = None
+    end_time: TaskTime | None = None
 
 
 class TaskRead(BaseModel):
@@ -166,6 +197,8 @@ class TaskRead(BaseModel):
     scope: TaskScope
     due_date: date
     end_date: date | None
+    due_time: str | None
+    end_time: str | None
     span_days: int
     priority: int
     color: str | None
