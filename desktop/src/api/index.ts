@@ -11,6 +11,7 @@
 
 import { calendarApi, healthApi } from "./calendar";
 import { financeApi } from "./finance";
+import { notesApi } from "./notes";
 import { studyApi } from "./study";
 import { tasksApi } from "./tasks";
 
@@ -19,6 +20,7 @@ export const api = {
   finance: financeApi,
   calendar: calendarApi,
   study: studyApi,
+  notes: notesApi,
   health: healthApi,
 };
 

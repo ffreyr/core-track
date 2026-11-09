@@ -12,6 +12,7 @@ import "./styles/layout.css";
 import "./styles/calendar.css";
 import "./styles/views.css";
 import "./styles/study.css";
+import "./styles/notes.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

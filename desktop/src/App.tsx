@@ -16,6 +16,7 @@ import type { IsoDate } from "./api";
 import { CalendarView } from "./features/calendar/CalendarView";
 import { EditorsProvider } from "./features/editors/EditorsProvider";
 import { FinanceView } from "./features/finance/FinanceView";
+import { NotesView } from "./features/notes/NotesView";
 import { SettingsView } from "./features/settings/SettingsView";
 import { StudyView } from "./features/study/StudyView";
 import { Sidebar, type Tab } from "./features/shell/Sidebar";
@@ -27,7 +28,7 @@ import { PreferencesProvider, usePreferences } from "./state/preferences";
 import { DataSyncProvider } from "./state/sync";
 import { ToastProvider } from "./state/toasts";
 
-const TABS: readonly Tab[] = ["calendar", "tasks", "finance", "study", "settings"];
+const TABS: readonly Tab[] = ["calendar", "tasks", "finance", "study", "notes", "settings"];
 
 /** Sanitise the remembered tab (guards against stale/invalid stored values). */
 function sanitizeTab(stored: unknown): Tab {
@@ -80,6 +81,7 @@ function Shell() {
           <FinanceView anchor={anchor} onAnchorChange={setAnchor} onOpenDay={openDayInCalendar} />
         ) : null}
         {tab === "study" ? <StudyView /> : null}
+        {tab === "notes" ? <NotesView /> : null}
         {tab === "settings" ? <SettingsView /> : null}
       </main>
     </div>

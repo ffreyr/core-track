@@ -512,6 +512,68 @@ class StudySummary(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Notes (notepad)
+# ---------------------------------------------------------------------------
+
+#: Optional note title.
+NoteTitle = Annotated[str, Field(max_length=200)]
+
+#: Note body: plain text, generous cap so one note can hold long writing.
+NoteBody = Annotated[str, Field(max_length=100_000)]
+
+
+class NoteCreate(_InputModel):
+    """Body of ``POST /api/notes``. Title and body may each be empty, not both."""
+
+    title: NoteTitle = ""
+    body: NoteBody = ""
+    is_pinned: bool = False
+
+    # The body keeps its leading/trailing whitespace (indentation, blank lines).
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+
+    @model_validator(mode="after")
+    def _not_blank(self) -> Self:
+        """Reject notes with neither a title nor any body text."""
+        self.title = self.title.strip()
+        if not self.title and not self.body.strip():
+            raise ValueError("A note needs a title or some text")
+        return self
+
+
+class NoteUpdate(_PatchModel):
+    """Partial update of a note. Clearing both title and body is allowed (delete it instead if unwanted)."""
+
+    NON_NULLABLE: ClassVar[frozenset[str]] = frozenset({"title", "body", "is_pinned"})
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+
+    title: NoteTitle | None = None
+    body: NoteBody | None = None
+    is_pinned: bool | None = None
+
+    @model_validator(mode="after")
+    def _strip_title(self) -> Self:
+        """Trim the title only; the body is stored exactly as typed."""
+        if self.title is not None:
+            self.title = self.title.strip()
+        return self
+
+
+class NoteRead(BaseModel):
+    """A note as returned by the API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    title: str
+    body: str
+    is_pinned: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+# ---------------------------------------------------------------------------
 # Misc
 # ---------------------------------------------------------------------------
 

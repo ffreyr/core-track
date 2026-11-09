@@ -19,7 +19,7 @@ import { formatMoney } from "../../lib/money";
 import { usePreferences } from "../../state/preferences";
 import { useSyncStatus } from "../../state/sync";
 
-export type Tab = "calendar" | "tasks" | "finance" | "study" | "settings";
+export type Tab = "calendar" | "tasks" | "finance" | "study" | "notes" | "settings";
 
 /** Primary destinations; Settings lives in the footer. */
 const NAV_ITEMS: readonly { id: Exclude<Tab, "settings">; label: string; icon: IconName }[] = [
@@ -27,6 +27,7 @@ const NAV_ITEMS: readonly { id: Exclude<Tab, "settings">; label: string; icon: I
   { id: "tasks", label: "Tasks", icon: "tasks" },
   { id: "finance", label: "Finance", icon: "wallet" },
   { id: "study", label: "Study", icon: "timer" },
+  { id: "notes", label: "Notes", icon: "note" },
 ];
 
 const HEALTH_LABEL = { "on-track": "On track", tight: "Tight", over: "Over budget" } as const;

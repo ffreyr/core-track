@@ -21,6 +21,7 @@ from app.models import (
     MAX_TASK_SPAN_DAYS,
     FinanceKind,
     FinancialLog,
+    Note,
     StudySession,
     TaskItem,
     TaskScope,
@@ -819,3 +820,56 @@ def study_summary(db: Session, start: date, end: date, tz_name: str) -> schemas.
         ],
         active=schemas.StudySessionRead.model_validate(active) if active is not None else None,
     )
+
+
+# ---------------------------------------------------------------------------
+# Notes
+# ---------------------------------------------------------------------------
+
+
+def list_notes(db: Session, *, q: str | None = None, pinned: bool | None = None) -> Sequence[Note]:
+    """Notes ordered pinned first, then most recently edited.
+
+    Args:
+        db: Active session.
+        q: Case-insensitive text to look for in the title or body.
+        pinned: Only pinned (``True``) or only unpinned (``False``) notes.
+    """
+    stmt = select(Note)
+    if q:
+        # Escape LIKE wildcards so a search for "50%" matches literally.
+        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
+        stmt = stmt.where(Note.title.ilike(pattern, escape="\\") | Note.body.ilike(pattern, escape="\\"))
+    if pinned is not None:
+        stmt = stmt.where(Note.is_pinned.is_(pinned))
+    return db.scalars(stmt.order_by(Note.is_pinned.desc(), Note.updated_at.desc(), Note.id.desc())).all()
+
+
+def get_note(db: Session, note_id: int) -> Note | None:
+    """Return a note by id, or ``None``."""
+    return db.get(Note, note_id)
+
+
+def create_note(db: Session, payload: schemas.NoteCreate) -> Note:
+    """Store a new note."""
+    note = Note(**payload.model_dump())
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return note
+
+
+def update_note(db: Session, note: Note, payload: schemas.NoteUpdate) -> Note:
+    """Apply a partial update (only the fields the client sent)."""
+    for field_name, value in payload.model_dump(exclude_unset=True).items():
+        setattr(note, field_name, value)
+    db.commit()
+    db.refresh(note)
+    return note
+
+
+def delete_note(db: Session, note: Note) -> None:
+    """Permanently remove a note."""
+    db.delete(note)
+    db.commit()

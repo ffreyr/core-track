@@ -316,6 +316,37 @@ export interface StudySummary {
 }
 
 // ---------------------------------------------------------------------------
+// Notes
+// ---------------------------------------------------------------------------
+
+/** A notepad entry (`NoteRead`). */
+export interface Note {
+  id: number;
+  title: string;
+  body: string;
+  is_pinned: boolean;
+  created_at: IsoDateTime;
+  updated_at: IsoDateTime;
+}
+
+/** Body of `POST /api/notes`; a title or some body text is required. */
+export interface NoteCreate {
+  title?: string;
+  body?: string;
+  is_pinned?: boolean;
+}
+
+/** Body of `PATCH /api/notes/{id}`. */
+export type NoteUpdate = Partial<Pick<Note, "title" | "body" | "is_pinned">>;
+
+/** Query parameters of `GET /api/notes`. */
+export interface NoteListParams {
+  /** Case-insensitive text to find in the title or body. */
+  q?: string;
+  pinned?: boolean;
+}
+
+// ---------------------------------------------------------------------------
 // Meta
 // ---------------------------------------------------------------------------
 

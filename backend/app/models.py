@@ -1,6 +1,6 @@
 """SQLAlchemy ORM models.
 
-Three tables back the whole application:
+Four tables back the whole application:
 
 * ``tasks``          – :class:`TaskItem`, a to-do entry anchored to a calendar
   day (or a span of days) and tagged with a planning scope
@@ -9,6 +9,7 @@ Three tables back the whole application:
   either already settled (``is_paid``) or planned for a future date.
 * ``study_sessions`` – :class:`StudySession`, one timed study/focus session,
   optionally linked to a task.
+* ``notes``          – :class:`Note`, a free-form notepad entry.
 
 Money is stored as an integer number of minor units (cents/kuruş) in
 ``amount_cents``. Integers make SQL ``SUM`` exact and sidestep SQLite's lack of
@@ -389,3 +390,32 @@ class StudySession(Base):
     def __repr__(self) -> str:
         state = "running" if self.is_running else f"{self.duration_seconds}s"
         return f"<StudySession id={self.id} subject={self.subject!r} {state}>"
+
+
+class Note(Base):
+    """One notepad entry: an optional title and free-form plain-text body.
+
+    Business rules:
+        * Both title and body may be empty (a fresh note starts blank), but
+          the API never stores a note whose title *and* body are blank on
+          creation (see :mod:`app.schemas`).
+        * Pinned notes are listed before unpinned ones; within each group the
+          most recently edited note comes first.
+
+    New tables need no migration step: ``create_all`` creates them on startup.
+    """
+
+    __tablename__ = "notes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False, default="", server_default="")
+    body: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("0"), index=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow, index=True
+    )
+
+    def __repr__(self) -> str:
+        pin = " pinned" if self.is_pinned else ""
+        return f"<Note id={self.id}{pin} title={self.title!r}>"

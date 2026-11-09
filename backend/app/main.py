@@ -19,7 +19,7 @@ from app import schemas
 from app.config import get_settings
 from app.database import init_db
 from app.models import utcnow
-from app.routers import calendar, finance, study, tasks
+from app.routers import calendar, finance, notes, study, tasks
 
 
 @asynccontextmanager
@@ -48,7 +48,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.app_name,
         version=settings.app_version,
-        description="Single-user tasks, finance and calendar API for Core-Track.",
+        description="Single-user tasks, finance, calendar, study and notes API for Core-Track.",
         lifespan=lifespan,
     )
 
@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(finance.router, prefix=settings.api_prefix)
     app.include_router(calendar.router, prefix=settings.api_prefix)
     app.include_router(study.router, prefix=settings.api_prefix)
+    app.include_router(notes.router, prefix=settings.api_prefix)
 
     @app.get(f"{settings.api_prefix}/health", response_model=schemas.HealthResponse, tags=["meta"])
     def health() -> schemas.HealthResponse:
